@@ -33,8 +33,8 @@ function makeTweet(overrides: Partial<NormalizedTweet> = {}): NormalizedTweet {
   };
 }
 
-function openTemp(filename = 'xradar.db'): { db: Database; dbPath: string } {
-  const dir = mkdtempSync(join(tmpdir(), 'xradar-db-'));
+function openTemp(filename = 'xpulse.db'): { db: Database; dbPath: string } {
+  const dir = mkdtempSync(join(tmpdir(), 'xpulse-db-'));
   tempDirs.push(dir);
   const dbPath = join(dir, filename);
   const db = openDatabase(dbPath);
@@ -200,9 +200,9 @@ describe('TweetRepository', () => {
   });
 
   it('reopens the same file without throwing', () => {
-    const dir = mkdtempSync(join(tmpdir(), 'xradar-db-'));
+    const dir = mkdtempSync(join(tmpdir(), 'xpulse-db-'));
     tempDirs.push(dir);
-    const dbPath = join(dir, 'nested', 'xradar.db');
+    const dbPath = join(dir, 'nested', 'xpulse.db');
 
     const first = openDatabase(dbPath);
     openDbs.push(first);

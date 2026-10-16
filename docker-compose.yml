@@ -1,23 +1,23 @@
 services:
-  x-radar:
+  x-pulse:
     build: .
-    container_name: x-radar-engine
+    container_name: x-pulse-engine
     restart: unless-stopped
     env_file:
       - .env
     environment:
       - NODE_ENV=production
-      - DB_PATH=/data/xradar.db
+      - DB_PATH=/data/xpulse.db
       - GROK_WORKSPACE_DIR=/app/workspace
     volumes:
-      - xradar_sqlite:/data
+      - xpulse_sqlite:/data
       - ./workspace:/app/workspace
       - ${HOST_GROK_BIN_PATH:-/usr/local/bin/grok-build}:/usr/local/bin/grok-build:ro
       - ~/.config/grok:/root/.config/grok:ro
 
-  x-radar-test:
+  x-pulse-test:
     build: .
-    container_name: x-radar-test-harness
+    container_name: x-pulse-test-harness
     profiles: ["test"]
     environment:
       - NODE_ENV=test
@@ -28,4 +28,4 @@ services:
     command: ["npm", "test"]
 
 volumes:
-  xradar_sqlite:
+  xpulse_sqlite:

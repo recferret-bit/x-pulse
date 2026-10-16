@@ -23,8 +23,8 @@ describe('pipeline harness', () => {
   });
 
   it('ingests the fixture, stores influencers, and validates grok output', async () => {
-    const root = await mkdtemp(path.join(tmpdir(), 'x-radar-'));
-    const dbPath = path.join(root, 'xradar.db');
+    const root = await mkdtemp(path.join(tmpdir(), 'x-pulse-'));
+    const dbPath = path.join(root, 'xpulse.db');
     const workspaceDir = path.join(root, 'workspace');
     await mkdir(workspaceDir, { recursive: true });
     const now = new Date('2026-04-15T12:00:00.000Z');

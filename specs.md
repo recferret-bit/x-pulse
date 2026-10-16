@@ -1,7 +1,7 @@
-# SPECIFICATION: X-Radar Growth Engine (Node.js + TwitterAPI.io + Grok Build CLI)
+# SPECIFICATION: X-Pulse Growth Engine (Node.js + TwitterAPI.io + Grok Build CLI)
 
 ## 1. System Overview & Architecture
-You are tasked with building **X-Radar**, an automated X (Twitter) intelligence, trend discovery, and growth engine tailored for the **Indie GameDev** and **Solana** ecosystems.
+You are tasked with building **X-Pulse**, an automated X (Twitter) intelligence, trend discovery, and growth engine tailored for the **Indie GameDev** and **Solana** ecosystems.
 
 ### Core Tech Stack:
 - **Runtime:** Node.js 22 LTS + TypeScript 5.x (Strict Mode, ESM).
@@ -18,7 +18,7 @@ You are tasked with building **X-Radar**, an automated X (Twitter) intelligence,
 Create the exact following project layout:
 
 ```text
-x-radar/
+x-pulse/
 ├── docker-compose.yml
 ├── Dockerfile
 ├── package.json
@@ -69,7 +69,7 @@ x-radar/
 3. Implement `src/config/env.ts` using `zod`:
    - `TWITTER_API_KEY` (string, required)
    - `TWITTER_API_BASE_URL` (string, default: `https://api.twitterapi.io`)
-   - `DB_PATH` (string, default: `./data/xradar.db`)
+   - `DB_PATH` (string, default: `./data/xpulse.db`)
    - `GROK_WORKSPACE_DIR` (string, default: `./workspace`)
    - `GROK_BIN_PATH` (string, default: `grok-build`)
    - `TELEGRAM_BOT_TOKEN` & `TELEGRAM_CHAT_ID` (optional strings for report delivery)
@@ -254,26 +254,26 @@ CMD ["node", "dist/index.js", "daemon"]
 #### `docker-compose.yml`
 ```yaml
 services:
-  x-radar:
+  x-pulse:
     build: .
-    container_name: x-radar-engine
+    container_name: x-pulse-engine
     restart: unless-stopped
     env_file:
       - .env
     environment:
       - NODE_ENV=production
-      - DB_PATH=/data/xradar.db
+      - DB_PATH=/data/xpulse.db
       - GROK_WORKSPACE_DIR=/app/workspace
     volumes:
-      - xradar_sqlite:/data
+      - xpulse_sqlite:/data
       - ./workspace:/app/workspace
       # Mount host grok-build binary and auth session into the container
       - ${HOST_GROK_BIN_PATH:-/usr/local/bin/grok-build}:/usr/local/bin/grok-build:ro
       - ~/.config/grok:/root/.config/grok:ro
 
-  x-radar-test:
+  x-pulse-test:
     build: .
-    container_name: x-radar-test-harness
+    container_name: x-pulse-test-harness
      profiles: ["test"]
     environment:
       - NODE_ENV=test
@@ -283,7 +283,7 @@ services:
     command: ["npm", "test"]
 
 volumes:
-  xradar_sqlite:
+  xpulse_sqlite:
 ```
 
 ---

@@ -4,7 +4,7 @@
 Extend the existing directory structure with the Telegram delivery layer and deterministic HTML/Intent formatters:
 
 ```text
-x-radar/
+x-pulse/
 ├── src/
 │   ├── services/
 │   │   ├── x-intent.ts            # Builds URL-encoded [x.com/intent/tweet](https://x.com/intent/tweet) links for 1-click posting & replying

@@ -51,8 +51,8 @@ describe('e2e publish', () => {
   });
 
   it('ingests mocked tweets, delivers a mocked Telegram digest, and writes X composer links', async () => {
-    const root = await mkdtemp(path.join(tmpdir(), 'x-radar-e2e-'));
-    const dbPath = path.join(root, 'xradar.db');
+    const root = await mkdtemp(path.join(tmpdir(), 'x-pulse-e2e-'));
+    const dbPath = path.join(root, 'xpulse.db');
     const workspaceDir = path.join(root, 'workspace');
     await mkdir(workspaceDir, { recursive: true });
     const env = cliEnv({ dbPath, workspaceDir, twitterUrl: twitter.url, telegramUrl: telegram.url });
@@ -123,8 +123,8 @@ describe('e2e publish', () => {
   }, 30_000);
 
   it('run-once produces the same three drafts and five replies through mocked Telegram', async () => {
-    const root = await mkdtemp(path.join(tmpdir(), 'x-radar-e2e-once-'));
-    const dbPath = path.join(root, 'xradar.db');
+    const root = await mkdtemp(path.join(tmpdir(), 'x-pulse-e2e-once-'));
+    const dbPath = path.join(root, 'xpulse.db');
     const workspaceDir = path.join(root, 'workspace');
     await mkdir(workspaceDir, { recursive: true });
     telegram.reset();
@@ -204,7 +204,7 @@ function assertPublishableDigest(messages: RecordedTelegramMessage[]): ReadyPost
     expect(message.text.length).toBeLessThanOrEqual(4096);
   }
 
-  const summary = messages.find((message) => message.text.includes('X-Radar Digest'));
+  const summary = messages.find((message) => message.text.includes('X-Pulse Digest'));
   expect(summary?.text).toContain('09:30');
   expect(summary?.text).toContain('indiedev');
   expect(summary?.text).toContain('solana');

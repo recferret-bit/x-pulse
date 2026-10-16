@@ -5,12 +5,13 @@ import { loadEnv } from './config/env.js';
 import { openDatabase } from './db/client.js';
 import { TweetRepository } from './db/repository.js';
 import { createLogger } from './logger.js';
+import { readAdviseBrief, renderAdviceMarkdown, runAdvise } from './services/advise.js';
 import { analyze, ingest, notify, runOnce, startDaemon } from './pipeline.js';
 import { GrokRunner } from './services/grok-runner.js';
 import { TelegramNotifier } from './services/telegram-notifier.js';
 import { TwitterApiClient } from './services/twitter-api.js';
 
-const HELP = `Usage: x-radar <command>
+const HELP = `Usage: x-pulse <command>
 
 Commands:
   ingest     Fetch TwitterAPI.io pools and update SQLite
@@ -18,9 +19,10 @@ Commands:
   run-once   Ingest, then analyze
   daemon     Ingest every 3h; Grok digest at 08:00 and 17:00 UTC
   notify     Re-send workspace/output_latest.json to Telegram
+  advise     One-shot: search X for similar posts and send a draft to Telegram
 `;
 
-type Command = 'ingest' | 'analyze' | 'run-once' | 'daemon' | 'notify';
+type Command = 'ingest' | 'analyze' | 'run-once' | 'daemon' | 'notify' | 'advise';
 
 function invokedDirectly(): boolean {
   const entry = process.argv[1];
@@ -35,7 +37,8 @@ function parseCommand(argv: string | undefined): Command | 'help' | 'invalid' {
     argv === 'analyze' ||
     argv === 'run-once' ||
     argv === 'daemon' ||
-    argv === 'notify'
+    argv === 'notify' ||
+    argv === 'advise'
   ) {
     return argv;
   }
@@ -100,7 +103,19 @@ export async function main(): Promise<void> {
     if (command === 'ingest') await ingest(deps);
     else if (command === 'analyze') await analyze(deps);
     else if (command === 'run-once') await runOnce(deps);
-    else await notify(deps);
+    else if (command === 'notify') await notify(deps);
+    else {
+      const brief = readAdviseBrief(process.argv);
+      if (!brief) throw new Error('Usage: x-pulse advise <what the post is about>');
+      const advice = await runAdvise({
+        brief,
+        twitter,
+        telegram,
+        logger,
+        workspaceDir: env.GROK_WORKSPACE_DIR,
+      });
+      process.stdout.write(`${renderAdviceMarkdown(advice)}\n`);
+    }
 
     db.close();
     process.exit(0);

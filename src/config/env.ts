@@ -8,7 +8,7 @@ import { z } from 'zod';
 const EnvSchema = z.object({
   TWITTER_API_KEY: z.string().min(1),
   TWITTER_API_BASE_URL: z.string().url().default('https://api.twitterapi.io'),
-  DB_PATH: z.string().min(1).default('./data/xradar.db'),
+  DB_PATH: z.string().min(1).default('./data/xpulse.db'),
   GROK_WORKSPACE_DIR: z.string().min(1).default('./workspace'),
   GROK_BIN_PATH: z.string().min(1).default('grok-build'),
   TELEGRAM_BOT_TOKEN: z.string().min(1).optional(),

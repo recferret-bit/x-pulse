@@ -1,5 +1,6 @@
 import { silentLogger, type Logger } from '../logger.js';
 import type { GrokAnalysisResult } from './grok-runner.js';
+import type { PostAdvice } from './advise.js';
 import { buildPostIntentUrl, buildReplyIntentUrl, composePostText } from './x-intent.js';
 
 export function escapeTelegramHtml(input: string): string {
@@ -77,7 +78,7 @@ function stripLeadingAt(username: string): string {
 
 function formatSummary(analysis: GrokAnalysisResult, context: DigestContext): string {
   const lines = [
-    '<b>X-Radar Digest</b>',
+    '<b>X-Pulse Digest</b>',
     `<i>${escapeTelegramHtml(context.generatedAt)}</i>`,
     '',
     '<b>Optimal posting windows (UTC)</b>',
@@ -173,6 +174,59 @@ export function formatDigestMessages(
   return messages;
 }
 
+export function formatAdviseMessages(advice: PostAdvice): TelegramOutboundMessage[] {
+  const proposal = [
+    '<b>One-shot post advice</b>',
+    `Topic: ${escapeTelegramHtml(advice.topic)}`,
+    '',
+    `<b>${escapeTelegramHtml(advice.title)}</b>`,
+    escapeTelegramHtml(advice.content),
+    '',
+    `<b>When</b>: ${escapeTelegramHtml(advice.bestTimeToPostUTC)} UTC`,
+    `<b>Hashtags</b>: ${escapeTelegramHtml(advice.hashtags.map((tag) => `#${tag}`).join(' ') || 'none')}`,
+    `<b>Content type</b>: ${escapeTelegramHtml(advice.options.find((option) => option.recommended)?.label ?? advice.contentKind)}`,
+    escapeTelegramHtml(advice.mediaNote),
+    '',
+    '<b>Options</b>',
+    ...advice.options.map((option, index) => [
+      '',
+      `<b>${index + 1}. ${escapeTelegramHtml(option.label)}${option.recommended ? ' (recommended)' : ''}</b>`,
+      escapeTelegramHtml(option.reason),
+      `<pre>${escapeTelegramHtml(composePostText(optionDraft(advice, option.body)))}</pre>`,
+    ].join('\n')),
+    '',
+    '<b>Why</b>',
+    escapeTelegramHtml(advice.why),
+  ].join('\n');
+  const draftButton: InlineButton[][] = advice.options.map((option, index) => [
+    {
+      text: `${option.recommended ? '🚀' : '✏️'} Open option #${index + 1}`,
+      url: buildPostIntentUrl(optionDraft(advice, option.body)),
+    },
+  ]);
+
+  const evidenceLines = ['<b>Evidence from similar posts</b>'];
+  if (advice.evidence.length === 0) {
+    evidenceLines.push('No similar post cleared the spam and repost filters.');
+  }
+  for (const [index, item] of advice.evidence.entries()) {
+    evidenceLines.push(
+      '',
+      `<b>${index + 1}. @${escapeTelegramHtml(item.authorUsername)}</b>`,
+      escapeTelegramHtml(item.reason),
+      escapeTelegramHtml(item.url),
+    );
+  }
+  const evidenceButtons: InlineButton[][] = advice.evidence.map((item, index) => [
+    { text: `🔗 View @${item.authorUsername} (#${index + 1})`, url: item.url },
+  ]);
+
+  return [
+    ...toMessages(proposal, draftButton),
+    ...toMessages(evidenceLines.join('\n'), evidenceButtons),
+  ];
+}
+
 export interface TelegramNotifierOptions {
   token?: string;
   chatId?: string;
@@ -190,6 +244,22 @@ interface SendMessageBody {
   parse_mode: 'HTML';
   disable_web_page_preview: true;
   reply_markup?: { inline_keyboard: InlineButton[][] };
+}
+
+function optionDraft(advice: PostAdvice, body: string): {
+  hook: string;
+  body: string;
+  recommendedHashtags: string[];
+  accountsToMention: string[];
+  bestTimeToPostUTC: string;
+} {
+  return {
+    hook: advice.title,
+    body,
+    recommendedHashtags: advice.hashtags,
+    accountsToMention: advice.mentions,
+    bestTimeToPostUTC: advice.bestTimeToPostUTC,
+  };
 }
 
 function defaultSleep(ms: number): Promise<void> {
@@ -221,6 +291,14 @@ export class TelegramNotifier {
     analysis: GrokAnalysisResult,
     context: DigestContext,
   ): Promise<{ skipped: boolean; sent: number }> {
+    return this.deliver(formatDigestMessages(analysis, context));
+  }
+
+  async sendAdvise(advice: PostAdvice): Promise<{ skipped: boolean; sent: number }> {
+    return this.deliver(formatAdviseMessages(advice));
+  }
+
+  private async deliver(messages: TelegramOutboundMessage[]): Promise<{ skipped: boolean; sent: number }> {
     const token = this.token?.trim() ?? '';
     const chatId = this.chatId?.trim() ?? '';
     if (token === '' || chatId === '') {
@@ -228,12 +306,11 @@ export class TelegramNotifier {
       return { skipped: true, sent: 0 };
     }
 
-    const messages = formatDigestMessages(analysis, context);
     const doFetch = this.fetchImpl ?? globalThis.fetch;
-
     for (let index = 0; index < messages.length; index += 1) {
       if (index > 0) await this.sleep(this.delayMs);
       const message = messages[index];
+      if (!message) continue;
       const body: SendMessageBody = {
         chat_id: chatId,
         text: message.text,
