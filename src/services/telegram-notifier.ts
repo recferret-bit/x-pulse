@@ -1,6 +1,7 @@
 import { silentLogger, type Logger } from '../logger.js';
 import type { GrokAnalysisResult } from './grok-runner.js';
 import type { PostAdvice } from './advise.js';
+import { renderOptionPost } from './advise.js';
 import { buildPostIntentUrl, buildReplyIntentUrl, composePostText } from './x-intent.js';
 
 export function escapeTelegramHtml(input: string): string {
@@ -178,6 +179,7 @@ export function formatAdviseMessages(advice: PostAdvice): TelegramOutboundMessag
   const proposal = [
     '<b>One-shot post advice</b>',
     `Topic: ${escapeTelegramHtml(advice.topic)}`,
+    escapeTelegramHtml(advice.reading),
     '',
     `<b>${escapeTelegramHtml(advice.title)}</b>`,
     escapeTelegramHtml(advice.content),
@@ -187,13 +189,20 @@ export function formatAdviseMessages(advice: PostAdvice): TelegramOutboundMessag
     `<b>Content type</b>: ${escapeTelegramHtml(advice.options.find((option) => option.recommended)?.label ?? advice.contentKind)}`,
     escapeTelegramHtml(advice.mediaNote),
     '',
-    '<b>Options</b>',
-    ...advice.options.map((option, index) => [
-      '',
-      `<b>${index + 1}. ${escapeTelegramHtml(option.label)}${option.recommended ? ' (recommended)' : ''}</b>`,
-      escapeTelegramHtml(option.reason),
-      `<pre>${escapeTelegramHtml(composePostText(optionDraft(advice, option.body)))}</pre>`,
-    ].join('\n')),
+    '<b>Proposed posts</b>',
+    ...advice.options.map((option, index) => {
+      const hashtags = advice.hashtags.map((tag) => `#${tag}`).join(' ') || 'none';
+      return [
+        '',
+        `<b>${index + 1}. ${escapeTelegramHtml(option.label)}${option.recommended ? ' (recommended)' : ''}</b>`,
+        `Label: ${escapeTelegramHtml(option.label)}`,
+        `Time: ${escapeTelegramHtml(advice.bestTimeToPostUTC)} UTC`,
+        `Hashtags: ${escapeTelegramHtml(hashtags)}`,
+        'Text:',
+        `<pre>${escapeTelegramHtml(renderOptionPost(advice, option.body))}</pre>`,
+        `Why: ${escapeTelegramHtml(option.reason)}`,
+      ].join('\n');
+    }),
     '',
     '<b>Why</b>',
     escapeTelegramHtml(advice.why),
@@ -201,7 +210,13 @@ export function formatAdviseMessages(advice: PostAdvice): TelegramOutboundMessag
   const draftButton: InlineButton[][] = advice.options.map((option, index) => [
     {
       text: `${option.recommended ? '🚀' : '✏️'} Open option #${index + 1}`,
-      url: buildPostIntentUrl(optionDraft(advice, option.body)),
+      url: buildPostIntentUrl({
+        hook: advice.title,
+        body: option.body,
+        recommendedHashtags: advice.hashtags,
+        accountsToMention: advice.mentions,
+        bestTimeToPostUTC: advice.bestTimeToPostUTC,
+      }),
     },
   ]);
 
@@ -244,22 +259,6 @@ interface SendMessageBody {
   parse_mode: 'HTML';
   disable_web_page_preview: true;
   reply_markup?: { inline_keyboard: InlineButton[][] };
-}
-
-function optionDraft(advice: PostAdvice, body: string): {
-  hook: string;
-  body: string;
-  recommendedHashtags: string[];
-  accountsToMention: string[];
-  bestTimeToPostUTC: string;
-} {
-  return {
-    hook: advice.title,
-    body,
-    recommendedHashtags: advice.hashtags,
-    accountsToMention: advice.mentions,
-    bestTimeToPostUTC: advice.bestTimeToPostUTC,
-  };
 }
 
 function defaultSleep(ms: number): Promise<void> {

@@ -65,7 +65,10 @@ describe('advise harness', () => {
       expect(proposal?.text).toContain('Why');
       expect(proposal?.text).toContain('torch falloff');
       expect(proposal?.text).toContain('09:30');
-      expect(proposal?.text).toContain('Options');
+      expect(proposal?.text).toContain('Proposed posts');
+      expect(proposal?.text).toContain('Label:');
+      expect(proposal?.text).toContain('Hashtags:');
+      expect(proposal?.text).toContain('Text:');
       expect(proposal?.text).toContain('Text, result first');
       const draftUrl = proposal?.inlineKeyboard.flat().find((button) => button.text.includes('Open option'))?.url;
       expect(draftUrl?.startsWith('https://x.com/intent/tweet?')).toBe(true);
