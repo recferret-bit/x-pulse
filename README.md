@@ -53,8 +53,11 @@ npm test
 ## Docker
 
 ```bash
-docker compose up --build
+docker compose up -d --build
+docker compose exec x-pulse node dist/index.js advise "I shipped a torch-falloff GIF and Steam wishlists jumped"
 docker compose --profile test run --rm x-pulse-test
 ```
+
+`up -d` starts the daemon in the background. The `exec` line is a one-shot advice request. The same text is sent to Telegram and written to `workspace/reports/advise_latest.md`.
 
 The `x-pulse` service mounts host Grok auth from `~/.config/grok` and the `grok-build` binary from `HOST_GROK_BIN_PATH` (default `/usr/local/bin/grok-build`). Inside the container the binary still runs with cwd `/app/workspace` (the mounted `./workspace` directory), so it does not index `.env`. SQLite lives on the `xpulse_sqlite` volume at `/data/xpulse.db`.

@@ -1,3 +1,5 @@
+# One app container. SQLite is a file, not a second service.
+# better-sqlite3 runs inside x-pulse and opens DB_PATH.
 services:
   x-pulse:
     build: .
@@ -7,14 +9,21 @@ services:
       - .env
     environment:
       - NODE_ENV=production
+      # Database file. WAL sidecars (xpulse.db-wal, xpulse.db-shm) sit next to it.
       - DB_PATH=/data/xpulse.db
+      # grok-build is spawned with this directory as its cwd.
       - GROK_WORKSPACE_DIR=/app/workspace
     volumes:
+      # Persistent SQLite data. Survives container recreate. See the volume below.
       - xpulse_sqlite:/data
+      # Digest, advise report, and the JSON files Grok reads and writes.
       - ./workspace:/app/workspace
+      # Host grok-build binary. The container does not install its own CLI.
       - ${HOST_GROK_BIN_PATH:-/usr/local/bin/grok-build}:/usr/local/bin/grok-build:ro
+      # Host Grok login. The child process uses this session.
       - ~/.config/grok:/root/.config/grok:ro
 
+  # Offline tests. No volume: the suite uses its own temp databases.
   x-pulse-test:
     build: .
     container_name: x-pulse-test-harness
@@ -29,3 +38,7 @@ services:
 
 volumes:
   xpulse_sqlite:
+    name: xpulse_sqlite
+    labels:
+      - com.xpulse.role=sqlite
+      - com.xpulse.path=/data/xpulse.db
