@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { NormalizedTweet } from '../../src/domain.js';
-import { buildTopicQuery, composeAdvice, contentKindOf, readAdviseBrief } from '../../src/services/advise.js';
+import { adviseLookbackSlices, buildTopicQuery, composeAdvice, contentKindOf, readAdviseBrief, renderAdviceMarkdown } from '../../src/services/advise.js';
 
 describe('advise', () => {
   it('reads the brief from the words after the command', () => {
@@ -35,14 +35,81 @@ describe('advise', () => {
     expect(advice.evidence[0]?.reason).toContain('200 likes');
     expect(advice.evidence[0]?.reason).toContain('2000 followers');
     expect(advice.evidence[0]?.reason).toContain('torch');
-    expect(advice.hashtags).toContain('indiedev');
+    expect(advice.hashtags).toEqual(['wishlist', 'falloff', 'torch']);
     expect(advice.bestTimeToPostUTC).toBe('09:30');
+    expect(advice.options.find((option) => option.recommended)?.body).not.toContain('mechanic');
     expect(advice.mentions).toEqual(['pixelwitch']);
     expect(advice.why).toContain('GIF');
     expect(advice.contentKind).toBe('gif');
     expect(advice.options.filter((option) => option.kind === 'text').length).toBeGreaterThanOrEqual(2);
     expect(advice.options.find((option) => option.recommended)?.label).toBe('GIF');
     expect(advice.options.find((option) => option.kind === 'gif')?.reason).toContain('pixelwitch');
+  });
+
+  it('searches the distinctive words and ignores unrelated high-score posts', () => {
+    const query = buildTopicQuery('I shiped multi-agent general project+code and solana audit library');
+    expect(query.startsWith('solana (')).toBe(true);
+    expect(query).toContain('audit');
+    expect(query).toContain('"multi-agent"');
+    expect(query).not.toContain('shiped');
+    expect(query).not.toContain('project');
+    expect(query).not.toContain(' code');
+
+    const advice = composeAdvice({
+      topic: 'I shiped multi-agent general project+code and solana audit library',
+      query,
+      searched: 40,
+      tweets: [
+        sample(
+          '1',
+          'ZhangRuonanPH',
+          274,
+          10,
+          28,
+          ['springbanquet', 'zhangruonan'],
+          true,
+          'Fanclub support project for the spring banquet.',
+        ),
+        sample(
+          '2',
+          'auditnix',
+          4000,
+          20,
+          4,
+          ['solana', 'audit'],
+          false,
+          'Open sourced a Solana audit library for multi-agent reviews.',
+        ),
+        sample('3', 'pricebot', 90000, 500, 40, ['solana'], false, 'Solana price is up today.'),
+      ],
+    });
+
+    expect(advice.evidence.map((item) => item.authorUsername)).toEqual(['auditnix']);
+    expect(advice.hashtags).toEqual(['audit', 'solana']);
+    expect(advice.reading).toMatch(/launch post/i);
+    expect(advice.reading.toLowerCase()).toContain('solana audit library');
+    expect(advice.reading.toLowerCase()).toContain('multi-agent');
+    expect(advice.title.toLowerCase()).toContain('solana');
+    expect(advice.evidence.map((item) => item.authorUsername)).not.toContain('pricebot');
+    expect(renderAdviceMarkdown(advice).toLowerCase()).toContain('solana audit library');
+    expect(advice.options.every((option) => !option.body.includes('mechanic'))).toBe(true);
+    const markdown = renderAdviceMarkdown(advice);
+    expect(markdown).toContain('- Label:');
+    expect(markdown).toContain('- Hashtags: #audit #solana');
+    expect(markdown).toContain('- Text:');
+    expect(markdown).toContain('Open sourced a Solana audit library');
+  });
+
+  it('samples the last 7 days in three one-page slices', () => {
+    const now = new Date('2026-04-15T12:00:00.000Z');
+    const slices = adviseLookbackSlices(now);
+    expect(slices).toHaveLength(3);
+    expect(slices[0]?.until).toBe(Math.floor(now.getTime() / 1000));
+    expect(slices[2]?.since).toBe(slices[0]!.until - 7 * 24 * 60 * 60);
+    expect(slices[0]?.since).toBe(slices[1]?.until);
+    expect(slices[1]?.since).toBe(slices[2]?.until);
+    const query = buildTopicQuery('solana audit library');
+    expect(query).not.toContain('since_time:');
   });
 
   it('prefers an attached video over the word gif in the text', () => {

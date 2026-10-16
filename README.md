@@ -10,7 +10,7 @@ X-Pulse watches Indie GameDev and Solana on X, scores what travels, and tells yo
 - **Run once** ingests, then analyzes.
 - **Daemon** ingests every 3 hours and runs the full digest at 08:00 and 17:00 UTC.
 - **Notify** resends the last digest without calling X or `grok-build` again.
-- **Advise** is a one-shot. You describe one post. It searches X for similar posts and returns the content type, a few copy and format options (text variants, image, GIF, video), hashtags, and a UTC time, each with the posts that justify it.
+- **Advise** is a one-shot. You describe one post. It samples similar posts from the last 7 days (three slices, one page each, so three TwitterAPI.io requests) and returns the content type, a few copy and format options (text variants, image, GIF, video), hashtags, and a UTC time, each with the posts that justify it.
 
 ## How to run
 

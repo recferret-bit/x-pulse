@@ -2,20 +2,33 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { NormalizedTweet, PoolName } from '../domain.js';
 import { silentLogger, type Logger } from '../logger.js';
-import { aggregateTerms, calculateViralityScore, classifyInfluencerTier, optimalPostingWindowsUTC } from './scorer.js';
+import { calculateViralityScore, classifyInfluencerTier, optimalPostingWindowsUTC } from './scorer.js';
 import type { TelegramNotifier } from './telegram-notifier.js';
-import { normalizeTweet, type TwitterApiClient } from './twitter-api.js';
+import { normalizeTweet, type RawTweet, type TwitterApiClient } from './twitter-api.js';
+import { composePostText } from './x-intent.js';
 
 const EVIDENCE_LIMIT = 5;
 const BEST_LIMIT = 8;
 const QUERY_TERM_LIMIT = 6;
+/** One page per slice. Three slices cover the week without paging through it. */
+const ADVISE_PAGES_PER_SLICE = 1;
+const DAY_MS = 24 * 60 * 60 * 1000;
+export const ADVISE_LOOKBACK_MS = 7 * DAY_MS;
+export const ADVISE_SLICE_COUNT = 3;
 
 const TOPIC_STOPWORDS = new Set([
   'the', 'a', 'an', 'of', 'to', 'and', 'in', 'on', 'for', 'is', 'it', 'this', 'that', 'with',
   'from', 'at', 'by', 'or', 'be', 'as', 'are', 'was', 'if', 'we', 'you', 'your', 'our',
   'want', 'post', 'about', 'please', 'write', 'make', 'tweet', 'something', 'just', 'like',
-  'how', 'what', 'when', 'into', 'my', 'mine', 'me', 'im', 'i', 'its', 'on', 'a',
+  'how', 'what', 'when', 'into', 'my', 'mine', 'me', 'im', 'i', 'its',
+  'shipped', 'shiped', 'shipping', 'built', 'made', 'released', 'launch', 'launched',
+  'grew', 'grow', 'growing',
+  'project', 'projects', 'code', 'general', 'multi', 'new', 'update', 'updates',
+  'open', 'source', 'opensource', 'tool', 'tools', 'also',
+  'gif', 'gifs', 'video', 'image', 'photo', 'screenshot', 'screenshots',
 ]);
+
+const DOMAIN_TERMS = new Set(['solana', 'ethereum', 'bitcoin', 'rust', 'typescript', 'audit', 'anchor']);
 
 export type ContentKind = 'text' | 'image' | 'gif' | 'video';
 
@@ -42,9 +55,19 @@ export interface AdviceOption {
   reason: string;
 }
 
+export interface BriefUnderstanding {
+  intent: 'launch' | 'showcase';
+  reading: string;
+  subjects: string[];
+  contextTerms: string[];
+  supportTerms: string[];
+  searchTerms: string[];
+}
+
 export interface PostAdvice {
   topic: string;
   query: string;
+  reading: string;
   title: string;
   content: string;
   hashtags: string[];
@@ -67,13 +90,63 @@ export function readAdviseBrief(argv: readonly string[]): string {
     .trim();
 }
 
+export function understandBrief(brief: string): BriefUnderstanding {
+  const normalized = brief.replace(/shiped/gi, 'shipped').replace(/\+/g, ' and ').replace(/\s+/g, ' ').trim();
+  const intent = /\b(shipped|shipping|built|released|open[ -]?sourced|launch(?:ed)?)\b/i.test(normalized)
+    ? 'launch'
+    : 'showcase';
+  const payload = normalized
+    .replace(/^\s*i\s+(?:just\s+)?(?:want\s+to\s+post\s+about|shipped|shipping|built|made|released|open[ -]?sourced|launched)\s+(?:an?\s+)?/i, '')
+    .trim();
+  const subjects = subjectClauses(payload.length > 0 ? payload : normalized);
+  const terms = topicTerms(payload.length > 0 ? payload : normalized);
+  const contextTerms = terms.filter((term) => DOMAIN_TERMS.has(term));
+  const supportTerms = terms.filter((term) => !DOMAIN_TERMS.has(term));
+  const phrases = contextPhrases(payload.length > 0 ? payload : normalized);
+  const searchTerms = unique([
+    ...contextTerms,
+    ...phrases,
+    ...supportTerms,
+  ]).slice(0, QUERY_TERM_LIMIT);
+  const shown = subjects.map(polishPhrase);
+  const about = shown.length >= 2
+    ? `${shown.slice(0, -1).join(', ')}, and ${shown[shown.length - 1]}`
+    : (shown[0] ?? polishPhrase(payload));
+  const reading = intent === 'launch'
+    ? `Read this as a launch post about ${about}.`
+    : `Read this as a post you want to publish about ${about}.`;
+  return { intent, reading, subjects: shown, contextTerms, supportTerms, searchTerms };
+}
+
 export function buildTopicQuery(brief: string): string {
-  const terms = topicTerms(brief).slice(0, QUERY_TERM_LIMIT);
+  const terms = understandBrief(brief).searchTerms;
   if (terms.length === 0) {
     throw new Error('Describe the post with a few concrete words so similar posts can be searched.');
   }
-  const clause = terms.map((term) => (/\s/.test(term) ? `"${term}"` : term)).join(' OR ');
-  return `(${clause}) min_faves:10 -is:retweet lang:en -airdrop -giveaway -pump -presale -whitelist -"$SOL"`;
+  const [anchor, ...rest] = terms;
+  const clause = rest.length === 0
+    ? quoteTerm(anchor ?? '')
+    : `${quoteTerm(anchor ?? '')} (${rest.map((term) => quoteTerm(term)).join(' OR ')})`;
+  return `${clause} min_faves:10 -is:retweet lang:en -airdrop -giveaway -pump -presale -whitelist -"$SOL"`;
+}
+
+export interface AdviseTimeSlice {
+  since: number;
+  until: number;
+}
+
+/** Three contiguous slices of the last 7 days, newest first. Unix seconds. */
+export function adviseLookbackSlices(now: Date): AdviseTimeSlice[] {
+  const end = Math.floor(now.getTime() / 1000);
+  const span = Math.floor(ADVISE_LOOKBACK_MS / 1000 / ADVISE_SLICE_COUNT);
+  return Array.from({ length: ADVISE_SLICE_COUNT }, (_, index) => ({
+    until: end - index * span,
+    since: end - (index + 1) * span,
+  }));
+}
+
+export function queryForSlice(baseQuery: string, slice: AdviseTimeSlice): string {
+  return `${baseQuery} since_time:${slice.since} until_time:${slice.until}`;
 }
 
 export function contentKindOf(text: string, hasMedia: boolean, mediaTypes: readonly string[] = []): ContentKind {
@@ -94,9 +167,15 @@ export function composeAdvice(input: {
   tweets: readonly AdvisedTweet[];
   searched: number;
 }): PostAdvice {
-  const ranked = [...input.tweets].sort(byScoreThenId);
+  const understood = understandBrief(input.topic);
+  const matchTerms = unique([...understood.contextTerms, ...understood.supportTerms]);
+  const relevant = input.tweets.filter((tweet) => matchesContext(tweet.text, understood));
+  const ranked = [...relevant].sort((a, b) => {
+    const byOverlap = sharedTerms(b.text, matchTerms).length - sharedTerms(a.text, matchTerms).length;
+    if (byOverlap !== 0) return byOverlap;
+    return byScoreThenId(a, b);
+  });
   const best = ranked.slice(0, BEST_LIMIT);
-  const briefTerms = new Set(topicTerms(input.topic));
   const evidence = best.slice(0, EVIDENCE_LIMIT).map((tweet, index) => {
     const contentKind = tweet.contentKind ?? contentKindOf(tweet.text, tweet.hasMedia);
     return {
@@ -111,15 +190,11 @@ export function composeAdvice(input: {
       hasMedia: tweet.hasMedia,
       contentKind,
       createdAt: tweet.createdAt,
-      reason: evidenceReason(tweet, index + 1, best.length, briefTerms, contentKind),
+      reason: evidenceReason(tweet, index + 1, best.length, matchTerms, contentKind),
     };
   });
 
-  const terms = aggregateTerms(
-    best.map((tweet) => ({ text: tweet.text, hashtags: tweet.hashtags, viralityScore: tweet.viralityScore })),
-    1,
-  );
-  const hashtags = (terms.hashtags.length > 0 ? terms.hashtags.map((term) => term.term) : topicTerms(input.topic)).slice(0, 3);
+  const hashtags = chooseHashtags(evidence, matchTerms);
   const windows = optimalPostingWindowsUTC(
     best.map((tweet) => ({ createdAt: tweet.createdAt, viralityScore: tweet.viralityScore })),
     1,
@@ -127,20 +202,22 @@ export function composeAdvice(input: {
   const bestTimeToPostUTC = windows[0] ?? 'not enough similar posts';
   const lead = evidence[0];
   const mentions = lead && classifyInfluencerTier(lead.followers) ? [lead.authorUsername] : [];
-  const title = titleFromTopic(input.topic);
-  const options = buildOptions(evidence);
+  const title = titleFromUnderstanding(understood);
+  const options = buildOptions(understood, evidence);
   const recommended = options.find((option) => option.recommended) ?? options[0];
   const contentKind = recommended?.kind ?? 'text';
   const content = recommended?.body ?? 'State the result in the first line and name the constraint in the second.';
   const mediaNote = recommended?.reason ?? 'No similar post cleared the filters.';
 
+  const ignored = input.tweets.length - relevant.length;
   const why = lead
-    ? `Searched X with ${input.query}. ${input.searched} posts came back and ${input.tweets.length} stayed after spam and repost filters. The content type is ${kindLabel(contentKind)} because that format holds the most virality among the top ${evidence.length}. Hashtags are the engagement-weighted tags on those posts. ${bestTimeToPostUTC} is 30 minutes before the UTC hour where they clustered. ${lead.reason}`
-    : `Searched X with ${input.query}. ${input.searched} posts came back and none stayed after the spam and repost filters. The draft is text only, from your brief. There is no format or timing evidence.`;
+    ? `${understood.reading} A similar post had to match that context, not any single filler word. The search sampled the last 7 days in three slices, one page each. Searched X with ${input.query}. ${input.searched} posts came back, ${input.tweets.length} passed the spam and repost filters, and ${ignored} of those were off-context. The content type is ${kindLabel(contentKind)} because that format holds the most virality among the ${evidence.length} matches. ${bestTimeToPostUTC} is 30 minutes before the UTC hour where those matches clustered. ${lead.reason}`
+    : `${understood.reading} Searched X with ${input.query}. ${input.searched} posts came back and none matched that context. The drafts below are written from the brief only. There is no format or timing evidence.`;
 
   return {
     topic: input.topic,
     query: input.query,
+    reading: understood.reading,
     title,
     content,
     hashtags,
@@ -152,7 +229,7 @@ export function composeAdvice(input: {
     why,
     evidence,
     searched: input.searched,
-    kept: input.tweets.length,
+    kept: relevant.length,
   };
 }
 
@@ -170,13 +247,26 @@ export async function runAdvise(input: {
   const topic = input.brief.trim();
   const query = buildTopicQuery(topic);
   const pool = poolForBrief(topic);
-  logger.info('advise search', { query, pool });
-
-  const raws = await input.twitter.searchPool(query, { maxPages: input.maxPages ?? 2 });
+  const slices = adviseLookbackSlices(now);
+  const pagesPerSlice = Math.min(input.maxPages ?? ADVISE_PAGES_PER_SLICE, ADVISE_PAGES_PER_SLICE);
+  const oldest = now.getTime() - ADVISE_LOOKBACK_MS;
+  const seen = new Set<string>();
+  const raws: RawTweet[] = [];
+  for (const slice of slices) {
+    const sliced = queryForSlice(query, slice);
+    logger.info('advise search', { query: sliced, pool });
+    const page = await input.twitter.searchPool(sliced, { maxPages: pagesPerSlice });
+    for (const raw of page) {
+      if (seen.has(raw.id)) continue;
+      seen.add(raw.id);
+      raws.push(raw);
+    }
+  }
   const tweets: AdvisedTweet[] = [];
   for (const raw of raws) {
     const normalized = normalizeTweet(raw, pool, now);
     if (!normalized) continue;
+    if (new Date(normalized.createdAt).getTime() < oldest) continue;
     tweets.push({
       ...normalized,
       contentKind: contentKindOf(normalized.text, normalized.hasMedia, mediaTypesOf(raw)),
@@ -218,6 +308,8 @@ export function renderAdviceMarkdown(advice: PostAdvice): string {
     '',
     `Topic: ${advice.topic}`,
     '',
+    advice.reading,
+    '',
     `Search: \`${advice.query}\``,
     '',
     `## ${advice.title}`,
@@ -226,22 +318,9 @@ export function renderAdviceMarkdown(advice: PostAdvice): string {
     '',
     advice.content,
     '',
-    '## Options',
+    '## Proposed posts',
     '',
-    ...advice.options.map((option) =>
-      [
-        `### ${option.recommended ? 'Recommended: ' : ''}${option.label}`,
-        '',
-        option.reason,
-        '',
-        option.body,
-        '',
-      ].join('\n'),
-    ),
-    `Hashtags: ${advice.hashtags.map((tag) => `#${tag}`).join(' ') || 'none'}`,
-    `Mentions: ${advice.mentions.map((name) => `@${name}`).join(' ') || 'none'}`,
-    `Time: ${advice.bestTimeToPostUTC} UTC`,
-    '',
+    ...advice.options.map((option, index) => renderProposedPost(advice, option, index)),
     '## Why',
     '',
     advice.why,
@@ -255,42 +334,172 @@ export function renderAdviceMarkdown(advice: PostAdvice): string {
 function topicTerms(brief: string): string[] {
   const seen = new Set<string>();
   const terms: string[] = [];
+  for (const match of brief.toLowerCase().matchAll(/\p{L}[\p{L}\p{N}]*(?:-\p{L}[\p{L}\p{N}]*)+/gu)) {
+    const phrase = match[0];
+    if (phrase && !seen.has(phrase)) {
+      seen.add(phrase);
+      terms.push(phrase);
+    }
+  }
   for (const token of brief.toLowerCase().split(/[^\p{L}\p{N}]+/u)) {
     if (token.length < 3 || PURE_NUMBER.test(token) || TOPIC_STOPWORDS.has(token) || seen.has(token)) continue;
     seen.add(token);
     terms.push(token);
   }
-  return terms;
+  return terms.sort((a, b) => specificity(b) - specificity(a) || a.localeCompare(b));
 }
 
-function titleFromTopic(topic: string): string {
-  const clean = topic.replace(/\s+/g, ' ').trim();
-  const sentence = clean.split(/(?<=[.!?])\s/u)[0] ?? clean;
+function specificity(term: string): number {
+  let score = term.length;
+  if (term.includes('-')) score += 8;
+  if (DOMAIN_TERMS.has(term)) score += 20;
+  return score;
+}
+
+function quoteTerm(term: string): string {
+  return term.includes('-') || /\s/.test(term) ? `"${term}"` : term;
+}
+
+function sharedTerms(text: string, terms: readonly string[]): string[] {
+  const haystack = text.toLowerCase();
+  return terms.filter((term) => haystack.includes(term));
+}
+
+function subjectClauses(payload: string): string[] {
+  const raw = payload.split(/\s+and\s+/i).map((part) => part.replace(/\s+/g, ' ').trim()).filter((part) => part.length > 0);
+  const merged: string[] = [];
+  for (const part of raw) {
+    const meaningful = topicTerms(part);
+    if (meaningful.length === 0 && merged.length > 0) {
+      merged[merged.length - 1] = `${merged[merged.length - 1]} and ${part}`;
+      continue;
+    }
+    if (meaningful.length === 0) continue;
+    merged.push(part);
+  }
+  return merged.length > 0 ? merged : [payload];
+}
+
+function contextPhrases(payload: string): string[] {
+  const text = payload.toLowerCase();
+  const phrases: string[] = [];
+  if (text.includes('solana') && text.includes('audit')) phrases.push('solana audit');
+  if (text.includes('audit') && text.includes('library')) phrases.push('audit library');
+  const hyphenated = text.match(/\p{L}[\p{L}\p{N}]*(?:-\p{L}[\p{L}\p{N}]*)+/gu) ?? [];
+  for (const phrase of hyphenated) {
+    if (!TOPIC_STOPWORDS.has(phrase)) phrases.push(phrase);
+  }
+  return phrases;
+}
+
+function matchesContext(text: string, understood: BriefUnderstanding): boolean {
+  const anchors = sharedTerms(text, understood.contextTerms);
+  const support = sharedTerms(text, understood.supportTerms);
+  if (understood.contextTerms.length > 0 && understood.supportTerms.length > 0) {
+    return anchors.length + (text.toLowerCase().includes('solana audit') ? 1 : 0) >= 1 && (anchors.length + support.length) >= 2;
+  }
+  const all = sharedTerms(text, understood.searchTerms);
+  return all.length >= (understood.searchTerms.length === 1 ? 1 : 2);
+}
+
+function titleFromUnderstanding(understood: BriefUnderstanding): string {
+  const about = understood.subjects.length >= 2
+    ? `${understood.subjects[0]} and ${understood.subjects.slice(1).join(' and ')}`
+    : (understood.subjects[0] ?? 'this');
+  const sentence = understood.intent === 'launch' ? `Shipped ${about}` : about;
   const chars = [...sentence];
-  if (chars.length <= 90) return sentence;
-  const cut = chars.slice(0, 90).join('');
+  if (chars.length <= 120) return sentence;
+  const cut = chars.slice(0, 120).join('');
   const space = cut.lastIndexOf(' ');
   return space > 40 ? cut.slice(0, space) : cut;
 }
 
+function polishPhrase(phrase: string): string {
+  return phrase.replace(/\bsolana\b/gi, 'Solana').replace(/\s+/g, ' ').trim();
+}
+
+function unique(values: readonly string[]): string[] {
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const value of values) {
+    if (!value || seen.has(value)) continue;
+    seen.add(value);
+    result.push(value);
+  }
+  return result;
+}
+
+export function renderOptionPost(advice: Pick<PostAdvice, 'title' | 'hashtags' | 'mentions' | 'bestTimeToPostUTC'>, body: string): string {
+  return composePostText({
+    hook: advice.title,
+    body,
+    recommendedHashtags: advice.hashtags,
+    accountsToMention: advice.mentions,
+    bestTimeToPostUTC: advice.bestTimeToPostUTC,
+  });
+}
+
+function renderProposedPost(advice: PostAdvice, option: AdviceOption, index: number): string {
+  const hashtags = advice.hashtags.map((tag) => `#${tag}`).join(' ') || 'none';
+  return [
+    `### ${index + 1}. ${option.label}`,
+    '',
+    `- Recommended: ${option.recommended ? 'yes' : 'no'}`,
+    `- Label: ${option.label}`,
+    `- Time: ${advice.bestTimeToPostUTC} UTC`,
+    `- Hashtags: ${hashtags}`,
+    '- Text:',
+    '',
+    '```',
+    renderOptionPost(advice, option.body),
+    '```',
+    '',
+    `- Why: ${option.reason}`,
+    '',
+  ].join('\n');
+}
+
+function chooseHashtags(evidence: readonly AdviceEvidence[], terms: readonly string[]): string[] {
+  const counts = new Map<string, number>();
+  const names = new Set(evidence.map((item) => item.authorUsername.toLowerCase()));
+  for (const item of evidence) {
+    for (const tag of item.hashtags) {
+      const key = tag.toLowerCase().replace(/^#+/, '');
+      if (key.length < 2 || names.has(key) || TOPIC_STOPWORDS.has(key)) continue;
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+  }
+  const ranked = [...counts.entries()].sort((a, b) => {
+    const aTopic = terms.some((term) => a[0].includes(term) || term.includes(a[0])) ? 1 : 0;
+    const bTopic = terms.some((term) => b[0].includes(term) || term.includes(b[0])) ? 1 : 0;
+    if (aTopic !== bTopic) return bTopic - aTopic;
+    if (a[1] !== b[1]) return b[1] - a[1];
+    return a[0].localeCompare(b[0]);
+  });
+  const topical = ranked.filter(([tag, count]) => count >= 2 || terms.some((term) => tag.includes(term) || term.includes(tag)));
+  if (topical.length > 0) return topical.slice(0, 3).map(([tag]) => tag);
+  return terms.filter((term) => !term.includes('-') && !term.includes(' ')).slice(0, 3);
+}
+
 type AdvisedTweet = NormalizedTweet & { contentKind?: ContentKind };
 
-function buildOptions(evidence: readonly AdviceEvidence[]): AdviceOption[] {
+function buildOptions(understood: BriefUnderstanding, evidence: readonly AdviceEvidence[]): AdviceOption[] {
+  const resultCopy = subjectCopy(understood);
   if (evidence.length === 0) {
     return [
       {
         kind: 'text',
         label: 'Text, result first',
-        body: 'State the result in the first line and name the constraint in the second.',
+        body: resultCopy,
         recommended: true,
-        reason: 'No similar post cleared the filters, so the only grounded option is a text post from your brief.',
+        reason: 'No similar post matched the context, so this draft uses your brief only.',
       },
       {
         kind: 'text',
         label: 'Text, constraint first',
-        body: 'Name the constraint in the first line, then the result.',
+        body: 'Shipping the code, not a trailer.',
         recommended: false,
-        reason: 'A second wording of the same text post. There is no media evidence to prefer GIF, video, or a still.',
+        reason: 'A second wording of the same text post. There is no media evidence for a GIF, video, or still.',
       },
     ];
   }
@@ -327,14 +536,14 @@ function buildOptions(evidence: readonly AdviceEvidence[]): AdviceOption[] {
     {
       kind: 'text',
       label: 'Text, result first',
-      body: 'Lead with the concrete result, then the constraint. Skip the trailer.',
+      body: resultCopy,
       recommended: leadKind === 'text',
       reason: textReason,
     },
     {
       kind: 'text',
       label: 'Text, constraint first',
-      body: 'Name the constraint in the first line, then the result it unlocked.',
+      body: 'Shipping the code, not a trailer.',
       recommended: false,
       reason: textReason,
     },
@@ -348,11 +557,18 @@ function buildOptions(evidence: readonly AdviceEvidence[]): AdviceOption[] {
   return options;
 }
 
+function subjectCopy(understood: BriefUnderstanding): string {
+  if (understood.subjects.length >= 2) {
+    return `Two parts: ${understood.subjects[0]}, and ${understood.subjects[1]}.`;
+  }
+  return understood.subjects[0] ? `This is about ${understood.subjects[0]}.` : 'The repo is the post.';
+}
+
 function formatBody(kind: ContentKind): string {
-  if (kind === 'gif') return 'Attach a 1–2 second loop of the mechanic. No trailer.';
-  if (kind === 'video') return 'Attach a silent clip under 15 seconds. Cut before the explanation.';
-  if (kind === 'image') return 'Attach one still of the moment the mechanic reads.';
-  return 'Lead with the concrete result, then the constraint.';
+  if (kind === 'gif') return 'Attach a 1–2 second loop of it running.';
+  if (kind === 'video') return 'Attach a silent clip under 15 seconds.';
+  if (kind === 'image') return 'Attach one still of the result.';
+  return 'The repo is the post.';
 }
 
 function formatReason(
@@ -378,15 +594,11 @@ function evidenceReason(
   tweet: NormalizedTweet,
   rank: number,
   total: number,
-  briefTerms: ReadonlySet<string>,
+  briefTerms: readonly string[],
   contentKind: ContentKind,
 ): string {
   const hour = new Date(tweet.createdAt).getUTCHours();
-  const overlap = tweet.text
-    .toLowerCase()
-    .split(/[^\p{L}\p{N}]+/u)
-    .filter((token) => briefTerms.has(token));
-  const uniqueOverlap = [...new Set(overlap)];
+  const uniqueOverlap = sharedTerms(tweet.text, briefTerms);
   const overlapClause = uniqueOverlap.length > 0
     ? ` It shares these words with your brief: ${uniqueOverlap.join(', ')}.`
     : ' It does not repeat your brief word for word, but it ranked among the strongest posts the search returned.';
