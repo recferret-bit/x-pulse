@@ -7,6 +7,7 @@ import { silentLogger } from '../../src/logger.js';
 import { startMockTelegramServer, type MockTelegramServer } from '../../src/harness/mock-telegram-server.js';
 import { loadTwitterFixture, startMockTwitterServer, type MockTwitterServer } from '../../src/harness/mock-twitter-server.js';
 import { runAdvise } from '../../src/services/advise.js';
+import { GrokRunner } from '../../src/services/grok-runner.js';
 import { TelegramNotifier } from '../../src/services/telegram-notifier.js';
 import { TwitterApiClient } from '../../src/services/twitter-api.js';
 
@@ -49,6 +50,11 @@ describe('advise harness', () => {
         logger: silentLogger,
         maxPages: 1,
         workspaceDir: root,
+        grok: new GrokRunner({
+          binPath: fileURLToPath(new URL('../../src/harness/mock-grok-cli.sh', import.meta.url)),
+          workspaceDir: root,
+          logger: silentLogger,
+        }),
       });
 
       expect(advice.evidence[0]?.authorUsername).toBe('pixelwitch');
@@ -57,12 +63,13 @@ describe('advise harness', () => {
       expect(advice.evidence.map((item) => item.tweetId)).not.toContain('9001993');
       expect(advice.bestTimeToPostUTC).toBe('09:30');
       expect(advice.why).toContain('200 likes');
+      expect(advice.why).toContain('written by Grok');
       expect(advice.contentKind).toBe('image');
       expect(advice.options.some((option) => option.kind === 'text' && option.body.length > 0)).toBe(true);
       expect(advice.options.find((option) => option.recommended)?.reason).toContain('%');
 
       const proposal = telegramServer.messages.find((message) => message.text.includes('One-shot post advice'));
-      expect(proposal?.text).toContain('Why');
+      expect(proposal?.text).not.toContain('Sampled the last 7 days');
       expect(proposal?.text).toContain('torch falloff');
       expect(proposal?.text).toContain('09:30');
       expect(proposal?.text).toContain('Proposed posts');
@@ -73,10 +80,13 @@ describe('advise harness', () => {
       const draftUrl = proposal?.inlineKeyboard.flat().find((button) => button.text.includes('Open option'))?.url;
       expect(draftUrl?.startsWith('https://x.com/intent/tweet?')).toBe(true);
       const draftText = new URL(draftUrl ?? 'https://x.com').searchParams.get('text') ?? '';
-      expect(draftText).toContain('@pixelwitch');
+      expect(draftText).not.toContain('@pixelwitch');
+      expect(draftText.toLowerCase()).toContain('torch');
       expect([...draftText].length).toBeLessThanOrEqual(280);
 
-      const evidence = telegramServer.messages.find((message) => message.text.includes('Evidence from similar posts'));
+      const evidence = telegramServer.messages.find((message) => message.text.includes('<b>Why</b>'));
+      expect(evidence?.text).toContain('Sampled the last 7 days');
+      expect(evidence?.text).toContain('Explanations');
       expect(evidence?.text).toContain('https://x.com/pixelwitch/status/9001001');
       expect(evidence?.text).toContain('2000 followers');
       expect(evidence?.inlineKeyboard[0]?.[0]?.url).toBe('https://x.com/pixelwitch/status/9001001');

@@ -14,6 +14,7 @@ import {
   type PoolName,
 } from './domain.js';
 import { silentLogger, type Logger } from './logger.js';
+import { loadProjectSoul } from './services/soul.js';
 import { TweetRepository } from './db/repository.js';
 import {
   aggregateTerms,
@@ -168,18 +169,36 @@ export async function analyze(deps: PipelineDeps): Promise<GrokAnalysisResult> {
     .sort(compareByViralityThenId)
     .slice(0, PAYLOAD_TWEET_LIMIT);
   const influencers = deps.repository.listInfluencers(PAYLOAD_INFLUENCER_LIMIT);
+  const soul = await loadProjectSoul(deps.env.GROK_WORKSPACE_DIR);
   const payload: GrokPayload = {
     generatedAt: now.toISOString(),
     optimalPostingWindowsUTC: windows,
     termStats,
     outlierTweets,
     influencers,
+    ...(soul
+      ? {
+          projectSoul: {
+            name: soul.name,
+            what: soul.what,
+            mood: soul.mood,
+            style: soul.style,
+            never: soul.never,
+            audience: soul.audience,
+            seek: soul.seek,
+            title: soul.title,
+            launch: soul.launch,
+            constraint: soul.constraint,
+          },
+        }
+      : {}),
   };
   const result = await deps.grok.analyze(payload);
+  const selection = renderExplanationPlain(explainSelection({ tweets, influencers, analysis: result }));
   await deps.telegram.sendDigest(result, {
     optimalPostingWindowsUTC: windows,
     generatedAt: payload.generatedAt,
-    selectionSummary: renderExplanationPlain(explainSelection({ tweets, influencers, analysis: result })),
+    selectionSummary: withSoul(soul, selection),
   });
   return result;
 }
@@ -200,8 +219,16 @@ export async function notify(deps: PipelineDeps): Promise<{ skipped: boolean; se
   const influencers = deps.repository.listInfluencers(PAYLOAD_INFLUENCER_LIMIT);
   return deps.telegram.sendDigest(analysis, {
     ...context,
-    selectionSummary: renderExplanationPlain(explainSelection({ tweets, influencers, analysis })),
+    selectionSummary: withSoul(await loadProjectSoul(deps.env.GROK_WORKSPACE_DIR), renderExplanationPlain(explainSelection({ tweets, influencers, analysis }))),
   });
+}
+
+function withSoul(soul: Awaited<ReturnType<typeof loadProjectSoul>>, selection: string): string {
+  if (!soul) return selection;
+  const voice = [`Voice: ${[soul.mood, soul.style].filter((part) => part.length > 0).join(' ')}`, soul.audience.length > 0 ? `Aimed at: ${soul.audience.join('; ')}.` : '']
+    .filter((part) => part.length > 0)
+    .join('\n\n');
+  return [voice, selection].filter((part) => part.length > 0).join('\n\n');
 }
 
 /** Minute 0 of every third UTC hour: 00, 03, 06, 09, 12, 15, 18, 21. */

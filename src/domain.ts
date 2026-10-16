@@ -52,6 +52,18 @@ export interface GrokPayload {
   };
   outlierTweets: NormalizedTweet[];
   influencers: Influencer[];
+  projectSoul?: {
+    name: string;
+    what: string;
+    mood: string;
+    style: string;
+    never: string[];
+    audience: string[];
+    seek: string[];
+    title: string;
+    launch: string;
+    constraint: string;
+  };
 }
 
 export const OUTLIER_FRACTION = 0.15;

@@ -16,7 +16,7 @@ services:
     volumes:
       # Persistent SQLite data. Survives container recreate. See the volume below.
       - xpulse_sqlite:/data
-      # Digest, advise report, and the JSON files Grok reads and writes.
+      # Host workspace, including SOUL.md. Advise and Grok read that file from here.
       - ./workspace:/app/workspace
       # Host grok-build binary. The container does not install its own CLI.
       - ${HOST_GROK_BIN_PATH:-/usr/local/bin/grok-build}:/usr/local/bin/grok-build:ro

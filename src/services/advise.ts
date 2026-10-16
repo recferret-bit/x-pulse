@@ -2,9 +2,11 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { NormalizedTweet, PoolName } from '../domain.js';
 import { silentLogger, type Logger } from '../logger.js';
-import { calculateViralityScore, classifyInfluencerTier, optimalPostingWindowsUTC } from './scorer.js';
+import { calculateViralityScore, optimalPostingWindowsUTC } from './scorer.js';
 import type { TelegramNotifier } from './telegram-notifier.js';
 import { normalizeTweet, type RawTweet, type TwitterApiClient } from './twitter-api.js';
+import type { GrokAdviseResult, GrokRunner } from './grok-runner.js';
+import { briefMatchesSoul, loadProjectSoul, seekPhrases, type ProjectSoul } from './soul.js';
 import { composePostText } from './x-intent.js';
 
 const EVIDENCE_LIMIT = 5;
@@ -51,6 +53,8 @@ export interface AdviceOption {
   kind: ContentKind;
   label: string;
   body: string;
+  /** How to shoot or attach the post. Not part of the tweet text. */
+  formatNote: string;
   recommended: boolean;
   reason: string;
 }
@@ -108,7 +112,7 @@ export function understandBrief(brief: string): BriefUnderstanding {
     ...phrases,
     ...supportTerms,
   ]).slice(0, QUERY_TERM_LIMIT);
-  const shown = subjects.map(polishPhrase);
+  const shown = subjects.map(describeSubject);
   const about = shown.length >= 2
     ? `${shown.slice(0, -1).join(', ')}, and ${shown[shown.length - 1]}`
     : (shown[0] ?? polishPhrase(payload));
@@ -118,15 +122,17 @@ export function understandBrief(brief: string): BriefUnderstanding {
   return { intent, reading, subjects: shown, contextTerms, supportTerms, searchTerms };
 }
 
-export function buildTopicQuery(brief: string): string {
+export function buildTopicQuery(brief: string, soul?: ProjectSoul | null): string {
   const terms = understandBrief(brief).searchTerms;
   if (terms.length === 0) {
     throw new Error('Describe the post with a few concrete words so similar posts can be searched.');
   }
+  const extras = (soul ? seekPhrases(soul) : []).filter((phrase) => !terms.includes(phrase)).slice(0, 3);
   const [anchor, ...rest] = terms;
-  const clause = rest.length === 0
+  const orTerms = [...rest, ...extras];
+  const clause = orTerms.length === 0
     ? quoteTerm(anchor ?? '')
-    : `${quoteTerm(anchor ?? '')} (${rest.map((term) => quoteTerm(term)).join(' OR ')})`;
+    : `${quoteTerm(anchor ?? '')} (${orTerms.map((term) => quoteTerm(term)).join(' OR ')})`;
   return `${clause} min_faves:10 -is:retweet lang:en -airdrop -giveaway -pump -presale -whitelist -"$SOL"`;
 }
 
@@ -166,6 +172,7 @@ export function composeAdvice(input: {
   query: string;
   tweets: readonly AdvisedTweet[];
   searched: number;
+  soul?: ProjectSoul | null;
 }): PostAdvice {
   const understood = understandBrief(input.topic);
   const matchTerms = unique([...understood.contextTerms, ...understood.supportTerms]);
@@ -201,18 +208,30 @@ export function composeAdvice(input: {
   );
   const bestTimeToPostUTC = windows[0] ?? 'not enough similar posts';
   const lead = evidence[0];
-  const mentions = lead && classifyInfluencerTier(lead.followers) ? [lead.authorUsername] : [];
-  const title = titleFromUnderstanding(understood);
-  const options = buildOptions(understood, evidence);
+  const mentions = mentionsFromBrief(input.topic);
+  const title = titleFromUnderstanding(understood, input.soul);
+  const options = buildOptions(understood, evidence, input.soul);
   const recommended = options.find((option) => option.recommended) ?? options[0];
   const contentKind = recommended?.kind ?? 'text';
   const content = recommended?.body ?? 'State the result in the first line and name the constraint in the second.';
   const mediaNote = recommended?.reason ?? 'No similar post cleared the filters.';
 
   const ignored = input.tweets.length - relevant.length;
-  const why = lead
-    ? `${understood.reading} A similar post had to match that context, not any single filler word. The search sampled the last 7 days in three slices, one page each. Searched X with ${input.query}. ${input.searched} posts came back, ${input.tweets.length} passed the spam and repost filters, and ${ignored} of those were off-context. The content type is ${kindLabel(contentKind)} because that format holds the most virality among the ${evidence.length} matches. ${bestTimeToPostUTC} is 30 minutes before the UTC hour where those matches clustered. ${lead.reason}`
-    : `${understood.reading} Searched X with ${input.query}. ${input.searched} posts came back and none matched that context. The drafts below are written from the brief only. There is no format or timing evidence.`;
+  const voice = input.soul ? `Voice: ${[input.soul.mood, input.soul.style].filter((part) => part.length > 0).join(' ')}` : '';
+  const why = [
+    understood.reading,
+    'A similar post had to match that context, not any single filler word.',
+    voice,
+    input.soul && input.soul.audience.length > 0 ? `Aimed at: ${input.soul.audience.join('; ')}.` : '',
+    'Sampled the last 7 days in three slices, one page each.',
+    `Query: ${input.query}`,
+    lead
+      ? `${input.searched} posts came back. ${input.tweets.length} passed the spam and repost filters. ${ignored} were off-context. ${relevant.length} matched.`
+      : `${input.searched} posts came back and none matched this context. The drafts use the brief and the project voice only.`,
+    lead ? `Format: ${kindLabel(contentKind)}. ${recommended?.reason ?? ''}` : '',
+    lead ? `Time: ${bestTimeToPostUTC} is 30 minutes before the UTC hour where the matches clustered.` : 'Time: no matching posts, so there is no clock evidence.',
+    lead?.reason ?? '',
+  ].filter((part) => part.length > 0).join('\n\n');
 
   return {
     topic: input.topic,
@@ -237,6 +256,7 @@ export async function runAdvise(input: {
   brief: string;
   twitter: TwitterApiClient;
   telegram: TelegramNotifier;
+  grok?: GrokRunner;
   now?: Date;
   logger?: Logger;
   maxPages?: number;
@@ -245,7 +265,8 @@ export async function runAdvise(input: {
   const logger = input.logger ?? silentLogger;
   const now = input.now ?? new Date();
   const topic = input.brief.trim();
-  const query = buildTopicQuery(topic);
+  const soul = input.workspaceDir ? await loadProjectSoul(input.workspaceDir) : null;
+  const query = buildTopicQuery(topic, soul);
   const pool = poolForBrief(topic);
   const slices = adviseLookbackSlices(now);
   const pagesPerSlice = Math.min(input.maxPages ?? ADVISE_PAGES_PER_SLICE, ADVISE_PAGES_PER_SLICE);
@@ -284,7 +305,31 @@ export async function runAdvise(input: {
     });
   }
 
-  const advice = composeAdvice({ topic, query, tweets, searched: raws.length });
+  let advice = composeAdvice({ topic, query, tweets, searched: raws.length, soul });
+  if (input.grok) {
+    try {
+      const draft = await input.grok.advise({
+        brief: topic,
+        reading: advice.reading,
+        soul,
+        hashtags: advice.hashtags,
+        bestTimeToPostUTC: advice.bestTimeToPostUTC,
+        contentKind: advice.contentKind,
+        evidence: advice.evidence.map((item) => ({
+          authorUsername: item.authorUsername,
+          url: item.url,
+          text: item.text,
+          contentKind: item.contentKind,
+          reason: item.reason,
+        })),
+      });
+      advice = applyGrokDraft(advice, draft);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      logger.warn('grok advise failed, using the local draft', { error: message });
+      advice = { ...advice, why: `${advice.why}\n\nGrok did not return a draft. Showing the local one.` };
+    }
+  }
   if (input.workspaceDir) await writeAdvice(input.workspaceDir, advice);
   await input.telegram.sendAdvise(advice);
   return advice;
@@ -402,11 +447,14 @@ function matchesContext(text: string, understood: BriefUnderstanding): boolean {
   return all.length >= (understood.searchTerms.length === 1 ? 1 : 2);
 }
 
-function titleFromUnderstanding(understood: BriefUnderstanding): string {
+function titleFromUnderstanding(understood: BriefUnderstanding, soul?: ProjectSoul | null): string {
+  if (soul?.title && briefMatchesSoul(`${understood.reading} ${understood.subjects.join(' ')}`, soul)) {
+    return soul.title;
+  }
   const about = understood.subjects.length >= 2
     ? `${understood.subjects[0]} and ${understood.subjects.slice(1).join(' and ')}`
     : (understood.subjects[0] ?? 'this');
-  const sentence = understood.intent === 'launch' ? `Shipped ${about}` : about;
+  const sentence = understood.intent === 'launch' ? `Open-sourced ${about}` : `Posting about ${about}`;
   const chars = [...sentence];
   if (chars.length <= 120) return sentence;
   const cut = chars.slice(0, 120).join('');
@@ -448,6 +496,7 @@ function renderProposedPost(advice: PostAdvice, option: AdviceOption, index: num
     `- Label: ${option.label}`,
     `- Time: ${advice.bestTimeToPostUTC} UTC`,
     `- Hashtags: ${hashtags}`,
+    ...(option.formatNote ? [`- Format note: ${option.formatNote}`] : []),
     '- Text:',
     '',
     '```',
@@ -483,23 +532,31 @@ function chooseHashtags(evidence: readonly AdviceEvidence[], terms: readonly str
 
 type AdvisedTweet = NormalizedTweet & { contentKind?: ContentKind };
 
-function buildOptions(understood: BriefUnderstanding, evidence: readonly AdviceEvidence[]): AdviceOption[] {
-  const resultCopy = subjectCopy(understood);
+function buildOptions(
+  understood: BriefUnderstanding,
+  evidence: readonly AdviceEvidence[],
+  soul?: ProjectSoul | null,
+): AdviceOption[] {
+  const onVoice = soul ? briefMatchesSoul(`${understood.reading} ${understood.subjects.join(' ')}`, soul) : false;
+  const resultCopy = onVoice && soul?.launch ? soul.launch : subjectCopy(understood);
+  const otherCopy = onVoice && soul?.constraint ? soul.constraint : constraintCopy(understood);
   if (evidence.length === 0) {
     return [
       {
         kind: 'text',
         label: 'Text, result first',
         body: resultCopy,
+        formatNote: '',
         recommended: true,
         reason: 'No similar post matched the context, so this draft uses your brief only.',
       },
       {
         kind: 'text',
         label: 'Text, constraint first',
-        body: 'Shipping the code, not a trailer.',
+        body: otherCopy,
+        formatNote: '',
         recommended: false,
-        reason: 'A second wording of the same text post. There is no media evidence for a GIF, video, or still.',
+        reason: 'A second wording of the same announcement. There is no media evidence for a GIF, video, or still.',
       },
     ];
   }
@@ -523,9 +580,10 @@ function buildOptions(understood: BriefUnderstanding, evidence: readonly AdviceE
     .map(([kind, group]) => ({
       kind,
       label: kindLabel(kind),
-      body: formatBody(kind),
+      body: resultCopy,
+      formatNote: formatNote(kind, understood, onVoice),
       recommended: kind === leadKind,
-      reason: formatReason(kind, group.count, evidence.length, group.weight, totalWeight, group.example.authorUsername),
+      reason: `${formatReason(kind, group.count, evidence.length, group.weight, totalWeight, group.example.authorUsername)} ${formatNote(kind, understood, onVoice)}`,
     }));
 
   const textGroup = groups.get('text');
@@ -537,13 +595,15 @@ function buildOptions(understood: BriefUnderstanding, evidence: readonly AdviceE
       kind: 'text',
       label: 'Text, result first',
       body: resultCopy,
+      formatNote: '',
       recommended: leadKind === 'text',
       reason: textReason,
     },
     {
       kind: 'text',
       label: 'Text, constraint first',
-      body: 'Shipping the code, not a trailer.',
+      body: otherCopy,
+      formatNote: '',
       recommended: false,
       reason: textReason,
     },
@@ -557,18 +617,77 @@ function buildOptions(understood: BriefUnderstanding, evidence: readonly AdviceE
   return options;
 }
 
-function subjectCopy(understood: BriefUnderstanding): string {
-  if (understood.subjects.length >= 2) {
-    return `Two parts: ${understood.subjects[0]}, and ${understood.subjects[1]}.`;
+function describeSubject(clause: string): string {
+  const lower = clause.toLowerCase();
+  if (lower.includes('multi-agent') && (lower.includes('code') || lower.includes('project'))) {
+    return 'a multi-agent codebase';
   }
-  return understood.subjects[0] ? `This is about ${understood.subjects[0]}.` : 'The repo is the post.';
+  if (lower.includes('multi-agent')) return 'a multi-agent system';
+  if (lower.includes('solana') && lower.includes('audit') && lower.includes('library')) return 'a Solana audit library';
+  if (lower.includes('solana') && lower.includes('audit')) return 'a Solana audit';
+  return polishPhrase(clause);
 }
 
-function formatBody(kind: ContentKind): string {
-  if (kind === 'gif') return 'Attach a 1–2 second loop of it running.';
-  if (kind === 'video') return 'Attach a silent clip under 15 seconds.';
-  if (kind === 'image') return 'Attach one still of the result.';
-  return 'The repo is the post.';
+function subjectCopy(understood: BriefUnderstanding): string {
+  const [first, second] = understood.subjects;
+  if (first && second && second.toLowerCase().includes('audit')) {
+    return 'I open-sourced both. The audit library checks Solana programs. The multi-agent codebase is what runs those checks.';
+  }
+  if (first && second) return `I open-sourced both: ${first}, and ${second}.`;
+  if (understood.intent === 'launch') return `I shipped ${first ?? 'this'}. The repo is up.`;
+  return first ? `This is about ${first}.` : 'The repo is up.';
+}
+
+function constraintCopy(understood: BriefUnderstanding): string {
+  const audit = understood.subjects.find((subject) => subject.toLowerCase().includes('audit'));
+  const other = understood.subjects.find((subject) => subject !== audit);
+  if (audit && other) return `Start with ${audit}. ${other.charAt(0).toUpperCase()}${other.slice(1)} is the code around it.`;
+  if (understood.subjects.length >= 2) {
+    return `Lead with ${understood.subjects[0]}. Then mention ${understood.subjects[1]}.`;
+  }
+  return `The useful part is ${understood.subjects[0] ?? 'the repo'}.`;
+}
+
+function formatNote(kind: ContentKind, understood: BriefUnderstanding, onVoice = false): string {
+  if (onVoice) {
+    if (kind === 'gif') return 'Loop the prize hit or the bad overtake. One or two seconds. Do not explain the joke in the post.';
+    if (kind === 'video') return 'Clip the long ride or a streamer losing the lane. Under 15 seconds.';
+    if (kind === 'image') return 'One still: the truck, the NFT, or the prize. No slideshow.';
+    return '';
+  }
+  const subject = understood.subjects.find((item) => item.toLowerCase().includes('audit')) ?? understood.subjects[0] ?? 'the work';
+  if (kind === 'gif') return `Show a 1–2 second loop of ${subject} running. Leave that instruction out of the post.`;
+  if (kind === 'video') return `Show a silent clip under 15 seconds of ${subject}. Leave that instruction out of the post.`;
+  if (kind === 'image') return `Attach one still of ${subject}. Leave that instruction out of the post.`;
+  return '';
+}
+
+function applyGrokDraft(advice: PostAdvice, draft: GrokAdviseResult): PostAdvice {
+  const textDrafts = draft.options.filter((option) => option.kind === 'text');
+  let textIndex = 0;
+  const options = advice.options.map((option) => {
+    if (option.kind === 'text') {
+      const next = textDrafts[textIndex];
+      textIndex += 1;
+      if (!next) return option;
+      return { ...option, label: next.label, body: next.body, formatNote: next.formatNote || option.formatNote };
+    }
+    const match = draft.options.find((item) => item.kind === option.kind);
+    if (!match) return option;
+    return { ...option, label: match.label, body: match.body, formatNote: match.formatNote || option.formatNote };
+  });
+  const recommended = options.find((option) => option.recommended) ?? options[0];
+  return {
+    ...advice,
+    title: draft.title,
+    options,
+    content: recommended?.body ?? advice.content,
+    why: `${advice.why}\n\nThe post text was written by Grok from this evidence and SOUL.md. The clock, hashtags, and evidence were not.`,
+  };
+}
+
+function mentionsFromBrief(brief: string): string[] {
+  return [...brief.matchAll(/@([A-Za-z0-9_]+)/g)].map((match) => match[1] ?? '').filter((name) => name.length > 0).slice(0, 2);
 }
 
 function formatReason(

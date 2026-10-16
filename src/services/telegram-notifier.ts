@@ -198,14 +198,11 @@ export function formatAdviseMessages(advice: PostAdvice): TelegramOutboundMessag
         `Label: ${escapeTelegramHtml(option.label)}`,
         `Time: ${escapeTelegramHtml(advice.bestTimeToPostUTC)} UTC`,
         `Hashtags: ${escapeTelegramHtml(hashtags)}`,
+        ...(option.formatNote ? [`Format note: ${escapeTelegramHtml(option.formatNote)}`] : []),
         'Text:',
         `<pre>${escapeTelegramHtml(renderOptionPost(advice, option.body))}</pre>`,
-        `Why: ${escapeTelegramHtml(option.reason)}`,
       ].join('\n');
     }),
-    '',
-    '<b>Why</b>',
-    escapeTelegramHtml(advice.why),
   ].join('\n');
   const draftButton: InlineButton[][] = advice.options.map((option, index) => [
     {
@@ -220,7 +217,12 @@ export function formatAdviseMessages(advice: PostAdvice): TelegramOutboundMessag
     },
   ]);
 
-  const evidenceLines = ['<b>Evidence from similar posts</b>'];
+  const explanationLines = ['<b>Why</b>', '', escapeTelegramHtml(advice.why), '', '<b>Explanations</b>'];
+  advice.options.forEach((option, index) => {
+    explanationLines.push('', `<b>${index + 1}. ${escapeTelegramHtml(option.label)}</b>`, escapeTelegramHtml(option.reason));
+  });
+  explanationLines.push('', '<b>Evidence from similar posts</b>');
+  const evidenceLines = explanationLines;
   if (advice.evidence.length === 0) {
     evidenceLines.push('No similar post cleared the spam and repost filters.');
   }

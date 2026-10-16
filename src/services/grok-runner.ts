@@ -34,7 +34,22 @@ export type PostDraft = GrokAnalysisResult['postDrafts'][number];
 export type ReplyTarget = GrokAnalysisResult['replyTargets'][number];
 
 export const GROK_ANALYZE_PROMPT =
-  'Read ./payload_latest.json. Use parallel subagents to: 1) Deconstruct Indie GameDev viral hooks, 2) Deconstruct Solana ecosystem discussions, 3) Draft 3 high-converting posts, tag strategies, and 5 tactical replies to recent influencer tweets. Write valid JSON to ./output_latest.json and markdown to ./reports/digest_latest.md.';
+  'Read ./SOUL.md and ./payload_latest.json. Use parallel subagents to: 1) Deconstruct Indie GameDev viral hooks, 2) Deconstruct Solana ecosystem discussions, 3) Draft 3 high-converting posts, tag strategies, and 5 tactical replies to recent influencer tweets. The same soul rules as advise apply: match Mood and Style, write so every group in Audience feels called out, and do not use anything in Never. Drafts must sound like this project, not a generic analyst. Title, Launch, and Constraint in SOUL.md are the voice, not text to paste blindly. Do not @ accounts just because they appear in the payload. Write valid JSON to ./output_latest.json and markdown to ./reports/digest_latest.md.';
+
+export const GROK_ADVISE_PROMPT =
+  'Read ./SOUL.md and ./advise_payload.json. Write only ./advise_output.json. Shape: {"title": string, "options": [{"label": string, "kind": "text"|"image"|"gif"|"video", "body": string, "formatNote": string}]}. Match the SOUL.md mood and style. Write so the Audience in SOUL.md feels called out: Solana and web3 people, web2 gamers, truck-sim players, and young players who want a prize. Do not use anything in Never. body is the tweet text. formatNote is how to shoot it and must not appear inside body. Do not @ accounts from the evidence. Use the payload hashtags and bestTimeToPostUTC. Include one option whose kind equals payload contentKind, plus two different text options aimed at different audiences. No markdown fences.';
+
+export const GrokAdviseSchema = z.object({
+  title: z.string().min(1),
+  options: z.array(z.object({
+    label: z.string().min(1),
+    kind: z.enum(['text', 'image', 'gif', 'video']),
+    body: z.string().min(1),
+    formatNote: z.string().default(''),
+  })).min(1).max(6),
+});
+
+export type GrokAdviseResult = z.infer<typeof GrokAdviseSchema>;
 
 export interface GrokRunnerOptions {
   binPath: string;
@@ -76,7 +91,7 @@ export class GrokRunner {
       timeoutMs: this.timeoutMs,
     });
 
-    const { code, stdout, stderr } = await this.spawnAnalyze();
+    const { code, stdout, stderr } = await this.spawnGrok(GROK_ANALYZE_PROMPT);
     this.logger.debug('grok process finished', { code, stdout, stderr });
 
     if (code !== 0) {
@@ -89,14 +104,28 @@ export class GrokRunner {
     return GrokAnalysisSchema.parse(parsed);
   }
 
-  private spawnAnalyze(): Promise<GrokProcessResult> {
+  async advise(payload: unknown): Promise<GrokAdviseResult> {
+    await mkdir(this.workspaceDir, { recursive: true });
+    const payloadPath = path.join(this.workspaceDir, 'advise_payload.json');
+    await writeFile(payloadPath, `${JSON.stringify(payload, null, 2)}\n`, 'utf8');
+    this.logger.info('starting grok advise', { binPath: this.binPath, workspaceDir: this.workspaceDir });
+    const { code, stdout, stderr } = await this.spawnGrok(GROK_ADVISE_PROMPT);
+    this.logger.debug('grok advise finished', { code, stdout, stderr });
+    if (code !== 0) {
+      throw new Error(`grok exited with code ${code ?? 'null'}: ${stderr}`);
+    }
+    const raw = await readFile(path.join(this.workspaceDir, 'advise_output.json'), 'utf8');
+    return GrokAdviseSchema.parse(JSON.parse(raw));
+  }
+
+  private spawnGrok(prompt: string): Promise<GrokProcessResult> {
     const binPath = this.binPath;
     const workspaceDir = this.workspaceDir;
     const timeoutMs = this.timeoutMs;
     const logger = this.logger;
 
     return new Promise((resolve, reject) => {
-      const child = spawn(binPath, ['-p', GROK_ANALYZE_PROMPT], {
+      const child = spawn(binPath, ['-p', prompt], {
         cwd: workspaceDir,
         stdio: ['ignore', 'pipe', 'pipe'],
         windowsHide: true,

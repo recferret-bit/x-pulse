@@ -111,6 +111,7 @@ export async function main(): Promise<void> {
         brief,
         twitter,
         telegram,
+        grok,
         logger,
         workspaceDir: env.GROK_WORKSPACE_DIR,
       });

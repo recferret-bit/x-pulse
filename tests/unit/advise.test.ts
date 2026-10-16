@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { parseProjectSoul } from '../../src/services/soul.js';
 import type { NormalizedTweet } from '../../src/domain.js';
 import { adviseLookbackSlices, buildTopicQuery, composeAdvice, contentKindOf, readAdviseBrief, renderAdviceMarkdown } from '../../src/services/advise.js';
 
@@ -38,7 +39,8 @@ describe('advise', () => {
     expect(advice.hashtags).toEqual(['wishlist', 'falloff', 'torch']);
     expect(advice.bestTimeToPostUTC).toBe('09:30');
     expect(advice.options.find((option) => option.recommended)?.body).not.toContain('mechanic');
-    expect(advice.mentions).toEqual(['pixelwitch']);
+    expect(advice.mentions).toEqual([]);
+    expect(advice.options.find((option) => option.recommended)?.body.startsWith('Attach')).toBe(false);
     expect(advice.why).toContain('GIF');
     expect(advice.contentKind).toBe('gif');
     expect(advice.options.filter((option) => option.kind === 'text').length).toBeGreaterThanOrEqual(2);
@@ -92,7 +94,51 @@ describe('advise', () => {
     expect(advice.title.toLowerCase()).toContain('solana');
     expect(advice.evidence.map((item) => item.authorUsername)).not.toContain('pricebot');
     expect(renderAdviceMarkdown(advice).toLowerCase()).toContain('solana audit library');
-    expect(advice.options.every((option) => !option.body.includes('mechanic'))).toBe(true);
+    expect(advice.options.every((option) => !option.body.includes('mechanic') && !option.body.includes('trailer') && !option.body.includes('Attach'))).toBe(true);
+    expect(advice.options.find((option) => option.kind === 'text' && option.label.includes('result'))?.body).toContain('checks Solana programs');
+    expect(advice.title).toBe('Open-sourced a multi-agent codebase and a Solana audit library');
+    expect(advice.why.split('\n\n').length).toBeGreaterThan(3);
+
+    const voiced = composeAdvice({
+      topic: 'I shiped multi-agent general project+code and solana audit library',
+      query,
+      searched: 40,
+      tweets: advice.evidence.length > 0 ? [] : [],
+      soul: parseProjectSoul([
+        'What: A multi-agent codebase and a Solana audit library.',
+        'Mood: Precise and dry.',
+        'Style: Short sentences.',
+        'Title: Open-sourced a Solana audit library and the multi-agent codebase that runs it',
+        'Launch: The audit library checks Solana programs before they land.',
+        'Constraint: Start with the audit library.',
+      ].join('\n')),
+    });
+    expect(voiced.title).toContain('Solana audit library');
+    expect(voiced.options.find((option) => option.label.includes('result'))?.body).toContain('checks Solana programs before they land');
+    expect(voiced.why).toContain('Voice: Precise and dry.');
+
+    const truck = parseProjectSoul([
+      'What: A truck simulator on Solana. Paid prizes, long rides, NFTs, and tools built for streamers.',
+      'Audience: Solana community, web2 truck sim players, young players who want web3 prizes',
+      'Seek: "truck simulator", "solana gaming", "prize pool"',
+      'Mood: Meme, loud, hyped.',
+      'Title: Long ride. Real prize. Your stream is not ready.',
+      'Launch: Paid prizes. A long haul. You in, or you watching?',
+      'Constraint: Think you can hold the lane?',
+    ].join('\n'));
+    const truckAdvice = composeAdvice({
+      topic: 'posting the truck simulator on solana with paid prizes for streamers',
+      query: 'solana (truck OR simulator)',
+      searched: 3,
+      tweets: [],
+      soul: truck,
+    });
+    expect(truckAdvice.title).toBe('Long ride. Real prize. Your stream is not ready.');
+    expect(truckAdvice.options.find((option) => option.label.includes('result'))?.body).toContain('You in, or you watching?');
+    expect(truckAdvice.why).toContain('Meme, loud, hyped.');
+    const aimed = buildTopicQuery('weekly prize for a long shift', truck);
+    expect(aimed).toContain('"truck simulator"');
+    expect(aimed).toContain('"solana gaming"');
     const markdown = renderAdviceMarkdown(advice);
     expect(markdown).toContain('- Label:');
     expect(markdown).toContain('- Hashtags: #audit #solana');
