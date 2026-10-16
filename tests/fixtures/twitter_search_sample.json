@@ -1,0 +1,611 @@
+{
+  "indiedev": {
+    "tweets": [
+      {
+        "type": "tweet",
+        "id": "9001001",
+        "url": "https://x.com/pixelwitch/status/9001001",
+        "text": "Shipped the torch falloff as a 12-frame GIF. Wishlist on Steam jumped after #indiedev players could read the mechanic in one second. #gamedev",
+        "source": "Twitter Web App",
+        "retweetCount": 0,
+        "replyCount": 0,
+        "likeCount": 200,
+        "quoteCount": 0,
+        "viewCount": 48000,
+        "createdAt": "2026-04-15T10:00:00.000Z",
+        "lang": "en",
+        "author": {
+          "type": "user",
+          "id": "501",
+          "userName": "pixelwitch",
+          "name": "pixelwitch",
+          "followers": 2000
+        },
+        "entities": {
+          "hashtags": [
+            {
+              "text": "indiedev"
+            },
+            {
+              "text": "gamedev"
+            }
+          ]
+        },
+        "extendedEntities": {
+          "media": [
+            {
+              "type": "photo",
+              "media_url_https": "https://pbs.twimg.com/media/example.jpg"
+            }
+          ]
+        }
+      },
+      {
+        "type": "tweet",
+        "id": "9001003",
+        "url": "https://x.com/shaderfox/status/9001003",
+        "text": "Indie game inventory bug: duplicated swords when reserve and settle disagree. Screenshot Saturday debug thread. #screenshotsaturday #gamedev",
+        "source": "Twitter Web App",
+        "retweetCount": 0,
+        "replyCount": 0,
+        "likeCount": 400,
+        "quoteCount": 0,
+        "viewCount": 22000,
+        "createdAt": "2026-04-15T10:00:00.000Z",
+        "lang": "en",
+        "author": {
+          "type": "user",
+          "id": "503",
+          "userName": "shaderfox",
+          "name": "shaderfox",
+          "followers": 10000
+        },
+        "entities": {
+          "hashtags": [
+            {
+              "text": "screenshotsaturday"
+            },
+            {
+              "text": "gamedev"
+            }
+          ]
+        },
+        "extendedEntities": {
+          "media": [
+            {
+              "type": "photo",
+              "media_url_https": "https://pbs.twimg.com/media/example.jpg"
+            }
+          ]
+        }
+      },
+      {
+        "type": "tweet",
+        "id": "9001004",
+        "url": "https://x.com/netcoder/status/9001004",
+        "text": "Lockstep rollback notes from our co-op prototype. The visual error budget matters more than the tick rate. #gamedev",
+        "source": "Twitter Web App",
+        "retweetCount": 0,
+        "replyCount": 0,
+        "likeCount": 10,
+        "quoteCount": 0,
+        "viewCount": 2500,
+        "createdAt": "2026-04-15T10:00:00.000Z",
+        "lang": "en",
+        "author": {
+          "type": "user",
+          "id": "504",
+          "userName": "netcoder",
+          "name": "netcoder",
+          "followers": 20000
+        },
+        "entities": {
+          "hashtags": [
+            {
+              "text": "gamedev"
+            }
+          ]
+        }
+      },
+      {
+        "type": "tweet",
+        "id": "9001006",
+        "url": "https://x.com/mapstitch/status/9001006",
+        "text": "Wishlist on Steam moved after we posted the raw blockout instead of the trailer. #indiedev",
+        "source": "Twitter Web App",
+        "retweetCount": 0,
+        "replyCount": 0,
+        "likeCount": 10,
+        "quoteCount": 0,
+        "viewCount": 2500,
+        "createdAt": "2026-04-15T10:00:00.000Z",
+        "lang": "en",
+        "author": {
+          "type": "user",
+          "id": "506",
+          "userName": "mapstitch",
+          "name": "mapstitch",
+          "followers": 20000
+        },
+        "entities": {
+          "hashtags": [
+            {
+              "text": "indiedev"
+            }
+          ]
+        }
+      },
+      {
+        "type": "tweet",
+        "id": "9001008",
+        "url": "https://x.com/tilebard/status/9001008",
+        "text": "Screenshot Saturday: the door animation is 9 frames and players finally understand the puzzle. #screenshotsaturday",
+        "source": "Twitter Web App",
+        "retweetCount": 0,
+        "replyCount": 0,
+        "likeCount": 10,
+        "quoteCount": 0,
+        "viewCount": 2500,
+        "createdAt": "2026-04-15T10:00:00.000Z",
+        "lang": "en",
+        "author": {
+          "type": "user",
+          "id": "508",
+          "userName": "tilebard",
+          "name": "tilebard",
+          "followers": 20000
+        },
+        "entities": {
+          "hashtags": [
+            {
+              "text": "screenshotsaturday"
+            }
+          ]
+        }
+      },
+      {
+        "type": "tweet",
+        "id": "9001010",
+        "url": "https://x.com/animbot/status/9001010",
+        "text": "Indie game cameras that ease too hard make combat feel late. Here is the curve we shipped. #gamedev",
+        "source": "Twitter Web App",
+        "retweetCount": 0,
+        "replyCount": 0,
+        "likeCount": 10,
+        "quoteCount": 0,
+        "viewCount": 2500,
+        "createdAt": "2026-04-15T10:00:00.000Z",
+        "lang": "en",
+        "author": {
+          "type": "user",
+          "id": "510",
+          "userName": "animbot",
+          "name": "animbot",
+          "followers": 20000
+        },
+        "entities": {
+          "hashtags": [
+            {
+              "text": "gamedev"
+            }
+          ]
+        }
+      },
+      {
+        "type": "tweet",
+        "id": "9001012",
+        "url": "https://x.com/foglane/status/9001012",
+        "text": "The wishlist on Steam spike came from one readable mechanic, not from a cinematic. #indiedev",
+        "source": "Twitter Web App",
+        "retweetCount": 0,
+        "replyCount": 0,
+        "likeCount": 10,
+        "quoteCount": 0,
+        "viewCount": 2500,
+        "createdAt": "2026-04-15T10:00:00.000Z",
+        "lang": "en",
+        "author": {
+          "type": "user",
+          "id": "512",
+          "userName": "foglane",
+          "name": "foglane",
+          "followers": 20000
+        },
+        "entities": {
+          "hashtags": [
+            {
+              "text": "indiedev"
+            }
+          ]
+        }
+      },
+      {
+        "type": "tweet",
+        "id": "9001015",
+        "url": "https://x.com/shaderlunch/status/9001015",
+        "text": "A 1:1 capture of the hit flash beat our trailer on #screenshotsaturday. #indiedev",
+        "source": "Twitter Web App",
+        "retweetCount": 0,
+        "replyCount": 0,
+        "likeCount": 10,
+        "quoteCount": 0,
+        "viewCount": 2500,
+        "createdAt": "2026-04-15T10:00:00.000Z",
+        "lang": "en",
+        "author": {
+          "type": "user",
+          "id": "515",
+          "userName": "shaderlunch",
+          "name": "shaderlunch",
+          "followers": 20000
+        },
+        "entities": {
+          "hashtags": [
+            {
+              "text": "screenshotsaturday"
+            },
+            {
+              "text": "indiedev"
+            }
+          ]
+        }
+      },
+      {
+        "type": "tweet",
+        "id": "9001992",
+        "url": "https://x.com/lootgoblin/status/9001992",
+        "text": "Huge giveaway for my indie game, whitelist is open, do not miss this drop",
+        "source": "Twitter Web App",
+        "retweetCount": 0,
+        "replyCount": 0,
+        "likeCount": 9000,
+        "quoteCount": 0,
+        "viewCount": 500000,
+        "createdAt": "2026-04-15T10:00:00.000Z",
+        "lang": "en",
+        "author": {
+          "type": "user",
+          "id": "902",
+          "userName": "lootgoblin",
+          "name": "lootgoblin",
+          "followers": 80000
+        },
+        "entities": {
+          "hashtags": [
+            {
+              "text": "indiedev"
+            }
+          ]
+        }
+      },
+      {
+        "type": "tweet",
+        "id": "9001993",
+        "url": "https://x.com/reposter/status/9001993",
+        "text": "RT @pixelwitch: wishlist on steam this indie game looks sharp #indiedev",
+        "source": "Twitter Web App",
+        "retweetCount": 0,
+        "replyCount": 0,
+        "likeCount": 999,
+        "quoteCount": 0,
+        "viewCount": 10,
+        "createdAt": "2026-04-15T10:00:00.000Z",
+        "lang": "en",
+        "author": {
+          "type": "user",
+          "id": "599",
+          "userName": "reposter",
+          "name": "reposter",
+          "followers": 100
+        },
+        "entities": {
+          "hashtags": [
+            {
+              "text": "indiedev"
+            }
+          ]
+        }
+      }
+    ],
+    "has_next_page": false,
+    "next_cursor": ""
+  },
+  "solana": {
+    "tweets": [
+      {
+        "type": "tweet",
+        "id": "9001002",
+        "url": "https://x.com/chainwhale/status/9001002",
+        "text": "Session keys for Solana gaming item transfers: the match server sponsors the move, revocation is the design problem. #solana",
+        "source": "Twitter Web App",
+        "retweetCount": 0,
+        "replyCount": 0,
+        "likeCount": 2000,
+        "quoteCount": 0,
+        "viewCount": 310000,
+        "createdAt": "2026-04-15T10:00:00.000Z",
+        "lang": "en",
+        "author": {
+          "type": "user",
+          "id": "502",
+          "userName": "chainwhale",
+          "name": "chainwhale",
+          "followers": 50000
+        },
+        "entities": {
+          "hashtags": [
+            {
+              "text": "solana"
+            }
+          ]
+        }
+      },
+      {
+        "type": "tweet",
+        "id": "9001005",
+        "url": "https://x.com/validatornina/status/9001005",
+        "text": "Local-first inventories still need an audit log. Solana gaming threads keep mixing the frame loop with settlement. #solana",
+        "source": "Twitter Web App",
+        "retweetCount": 0,
+        "replyCount": 0,
+        "likeCount": 10,
+        "quoteCount": 0,
+        "viewCount": 2500,
+        "createdAt": "2026-04-15T10:00:00.000Z",
+        "lang": "en",
+        "author": {
+          "type": "user",
+          "id": "505",
+          "userName": "validatornina",
+          "name": "validatornina",
+          "followers": 20000
+        },
+        "entities": {
+          "hashtags": [
+            {
+              "text": "solana"
+            }
+          ]
+        }
+      },
+      {
+        "type": "tweet",
+        "id": "9001009",
+        "url": "https://x.com/feepayer/status/9001009",
+        "text": "Web3 gaming comment threads are better when they show the account model. Solana session expiry is the actual bug. #solana",
+        "source": "Twitter Web App",
+        "retweetCount": 0,
+        "replyCount": 0,
+        "likeCount": 10,
+        "quoteCount": 0,
+        "viewCount": 2500,
+        "createdAt": "2026-04-15T10:00:00.000Z",
+        "lang": "en",
+        "author": {
+          "type": "user",
+          "id": "509",
+          "userName": "feepayer",
+          "name": "feepayer",
+          "followers": 20000
+        },
+        "entities": {
+          "hashtags": [
+            {
+              "text": "solana"
+            }
+          ]
+        }
+      },
+      {
+        "type": "tweet",
+        "id": "9001013",
+        "url": "https://x.com/rentcollector/status/9001013",
+        "text": "Solana gaming marketplaces keep storing the whole inventory onchain. Store the hash, serve the blob. #solana",
+        "source": "Twitter Web App",
+        "retweetCount": 0,
+        "replyCount": 0,
+        "likeCount": 10,
+        "quoteCount": 0,
+        "viewCount": 2500,
+        "createdAt": "2026-04-15T10:00:00.000Z",
+        "lang": "en",
+        "author": {
+          "type": "user",
+          "id": "513",
+          "userName": "rentcollector",
+          "name": "rentcollector",
+          "followers": 20000
+        },
+        "entities": {
+          "hashtags": [
+            {
+              "text": "solana"
+            }
+          ]
+        }
+      },
+      {
+        "type": "tweet",
+        "id": "9001016",
+        "url": "https://x.com/epochkid/status/9001016",
+        "text": "On the Solana gaming side, sponsored transactions need a visible revoke button. Builders keep skipping that. #solana",
+        "source": "Twitter Web App",
+        "retweetCount": 0,
+        "replyCount": 0,
+        "likeCount": 10,
+        "quoteCount": 0,
+        "viewCount": 2500,
+        "createdAt": "2026-04-15T10:00:00.000Z",
+        "lang": "en",
+        "author": {
+          "type": "user",
+          "id": "516",
+          "userName": "epochkid",
+          "name": "epochkid",
+          "followers": 20000
+        },
+        "entities": {
+          "hashtags": [
+            {
+              "text": "solana"
+            }
+          ]
+        }
+      },
+      {
+        "type": "tweet",
+        "id": "9001991",
+        "url": "https://x.com/airdropking/status/9001991",
+        "text": "Huge airdrop and $SOL presale. Pump the whitelist before it closes.",
+        "source": "Twitter Web App",
+        "retweetCount": 0,
+        "replyCount": 0,
+        "likeCount": 5000,
+        "quoteCount": 0,
+        "viewCount": 800000,
+        "createdAt": "2026-04-15T10:00:00.000Z",
+        "lang": "en",
+        "author": {
+          "type": "user",
+          "id": "901",
+          "userName": "airdropking",
+          "name": "airdropking",
+          "followers": 100000
+        },
+        "entities": {
+          "hashtags": [
+            {
+              "text": "solana"
+            }
+          ]
+        }
+      }
+    ],
+    "has_next_page": false,
+    "next_cursor": ""
+  },
+  "intersection": {
+    "tweets": [
+      {
+        "type": "tweet",
+        "id": "9001007",
+        "url": "https://x.com/cratewitch/status/9001007",
+        "text": "Our indie game uses Solana only for the trade log. The match stays on a boring websocket. #gamedev",
+        "source": "Twitter Web App",
+        "retweetCount": 0,
+        "replyCount": 0,
+        "likeCount": 10,
+        "quoteCount": 0,
+        "viewCount": 2500,
+        "createdAt": "2026-04-15T10:00:00.000Z",
+        "lang": "en",
+        "author": {
+          "type": "user",
+          "id": "507",
+          "userName": "cratewitch",
+          "name": "cratewitch",
+          "followers": 20000
+        },
+        "entities": {
+          "hashtags": [
+            {
+              "text": "gamedev"
+            }
+          ]
+        }
+      },
+      {
+        "type": "tweet",
+        "id": "9001011",
+        "url": "https://x.com/slotmage/status/9001011",
+        "text": "Indie game crafting on Solana: write the compact event, fold the bag on the client. #gamedev #solana",
+        "source": "Twitter Web App",
+        "retweetCount": 0,
+        "replyCount": 0,
+        "likeCount": 10,
+        "quoteCount": 0,
+        "viewCount": 2500,
+        "createdAt": "2026-04-15T10:00:00.000Z",
+        "lang": "en",
+        "author": {
+          "type": "user",
+          "id": "511",
+          "userName": "slotmage",
+          "name": "slotmage",
+          "followers": 20000
+        },
+        "entities": {
+          "hashtags": [
+            {
+              "text": "gamedev"
+            },
+            {
+              "text": "solana"
+            }
+          ]
+        }
+      },
+      {
+        "type": "tweet",
+        "id": "9001014",
+        "url": "https://x.com/cozyloop/status/9001014",
+        "text": "This indie game multiplayer backend settles cosmetics on Solana after the match, never during it. #gamedev",
+        "source": "Twitter Web App",
+        "retweetCount": 0,
+        "replyCount": 0,
+        "likeCount": 10,
+        "quoteCount": 0,
+        "viewCount": 2500,
+        "createdAt": "2026-04-15T10:00:00.000Z",
+        "lang": "en",
+        "author": {
+          "type": "user",
+          "id": "514",
+          "userName": "cozyloop",
+          "name": "cozyloop",
+          "followers": 20000
+        },
+        "entities": {
+          "hashtags": [
+            {
+              "text": "gamedev"
+            }
+          ]
+        }
+      },
+      {
+        "type": "tweet",
+        "id": "9001017",
+        "url": "https://x.com/bagfold/status/9001017",
+        "text": "Indie game trade rollback, shown onchain: reserve, settle, release. The sword stopped duplicating. #gamedev #solana",
+        "source": "Twitter Web App",
+        "retweetCount": 0,
+        "replyCount": 0,
+        "likeCount": 10,
+        "quoteCount": 0,
+        "viewCount": 2500,
+        "createdAt": "2026-04-15T10:00:00.000Z",
+        "lang": "en",
+        "author": {
+          "type": "user",
+          "id": "517",
+          "userName": "bagfold",
+          "name": "bagfold",
+          "followers": 20000
+        },
+        "entities": {
+          "hashtags": [
+            {
+              "text": "gamedev"
+            },
+            {
+              "text": "solana"
+            }
+          ]
+        }
+      }
+    ],
+    "has_next_page": false,
+    "next_cursor": ""
+  }
+}

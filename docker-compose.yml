@@ -1,0 +1,31 @@
+services:
+  x-radar:
+    build: .
+    container_name: x-radar-engine
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - NODE_ENV=production
+      - DB_PATH=/data/xradar.db
+      - GROK_WORKSPACE_DIR=/app/workspace
+    volumes:
+      - xradar_sqlite:/data
+      - ./workspace:/app/workspace
+      - ${HOST_GROK_BIN_PATH:-/usr/local/bin/grok-build}:/usr/local/bin/grok-build:ro
+      - ~/.config/grok:/root/.config/grok:ro
+
+  x-radar-test:
+    build: .
+    container_name: x-radar-test-harness
+    profiles: ["test"]
+    environment:
+      - NODE_ENV=test
+      - TWITTER_API_KEY=mock_key
+      - "DB_PATH=:memory:"
+      - GROK_BIN_PATH=/app/src/harness/mock-grok-cli.sh
+      - GROK_WORKSPACE_DIR=/app/workspace
+    command: ["npm", "test"]
+
+volumes:
+  xradar_sqlite:

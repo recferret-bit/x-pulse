@@ -1,0 +1,11 @@
+node_modules/
+dist/
+data/
+.env
+*.db
+*.db-wal
+*.db-shm
+workspace/payload_latest.json
+workspace/output_latest.json
+workspace/reports/*
+!workspace/reports/.gitkeep

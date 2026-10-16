@@ -1,0 +1,82 @@
+{
+  "trends": [
+    {
+      "pool": "indiedev",
+      "topic": "Shader-driven wishlist screenshots",
+      "whyItWorked": "A single looping GIF of a lighting change outperformed trailer clips because the mechanic was readable in one second.",
+      "mediaFormatRecommendation": "1:1 GIF or short silent screen capture"
+    },
+    {
+      "pool": "solana",
+      "topic": "Session keys for game item transfers",
+      "whyItWorked": "Builders argued about fee sponsorship versus local authority, and concrete code snippets traveled farther than price talk.",
+      "mediaFormatRecommendation": "Code snippet image plus a 4-line architecture note"
+    },
+    {
+      "pool": "intersection",
+      "topic": "Onchain inventory for indie co-op",
+      "whyItWorked": "The post showed a failed trade rollback and the fix, which gave both gamedev and Solana audiences something to reply to.",
+      "mediaFormatRecommendation": "Before/after screenshot of the inventory UI"
+    }
+  ],
+  "postDrafts": [
+    {
+      "hook": "Your wishlist spike is a lighting problem.",
+      "body": "I shipped a 12-frame capture of the torch falloff instead of a trailer. Steam visits from that post beat the trailer thread by 4x. Show the mechanic, then the constraint.",
+      "recommendedHashtags": ["indiedev", "gamedev", "screenshotsaturday"],
+      "accountsToMention": ["pixelwitch"],
+      "bestTimeToPostUTC": "17:30"
+    },
+    {
+      "hook": "Stop putting the game wallet on the hot path.",
+      "body": "Session keys let the match server sponsor item moves without popping a signature dialog mid-fight. The tradeoff is revocation latency. Design for that, not for a token graphic.",
+      "recommendedHashtags": ["solana", "gamedev"],
+      "accountsToMention": ["chainwhale"],
+      "bestTimeToPostUTC": "11:30"
+    },
+    {
+      "hook": "Co-op inventories break on partial fills.",
+      "body": "We treat each trade as a two-phase commit: reserve locally, settle onchain, release on timeout. Players forgive a 400ms wait. They do not forgive a duplicated sword.",
+      "recommendedHashtags": ["indiedev", "solana"],
+      "accountsToMention": ["shaderfox"],
+      "bestTimeToPostUTC": "05:30"
+    }
+  ],
+  "replyTargets": [
+    {
+      "tweetId": "9001001",
+      "tweetUrl": "https://x.com/pixelwitch/status/9001001",
+      "authorUsername": "pixelwitch",
+      "tier": "rising_star",
+      "suggestedReply": "The falloff read is doing the work here. If the torch radius is data-driven, post the curve next to the GIF so other devs can steal the setting instead of the aesthetic."
+    },
+    {
+      "tweetId": "9001002",
+      "tweetUrl": "https://x.com/chainwhale/status/9001002",
+      "authorUsername": "chainwhale",
+      "tier": "whale",
+      "suggestedReply": "Sponsoring the item transfer from the match server is the right cut. Publish the revocation window. A 30s session key with a hard match-end invalidate is easier to reason about than a rolling refresh."
+    },
+    {
+      "tweetId": "9001003",
+      "tweetUrl": "https://x.com/shaderfox/status/9001003",
+      "authorUsername": "shaderfox",
+      "tier": "rising_star",
+      "suggestedReply": "Duplicated stacks usually mean the reserve and the settle are not sharing an idempotency key. Key the reservation on matchId plus actor plus slot, and make settle a no-op when the key already landed."
+    },
+    {
+      "tweetId": "9001004",
+      "tweetUrl": "https://x.com/netcoder/status/9001004",
+      "authorUsername": "netcoder",
+      "tier": "rising_star",
+      "suggestedReply": "Prediction without a reconciliation budget just hides the loss. Cap the visual error and snap on the authoritative tick. Players accept a small correction more than a rubber-band after a kill."
+    },
+    {
+      "tweetId": "9001005",
+      "tweetUrl": "https://x.com/validatornina/status/9001005",
+      "authorUsername": "validatornina",
+      "tier": "whale",
+      "suggestedReply": "Local-first inventory is fine if the chain is the audit log and not the frame loop. Write the compact event, not the whole bag, and let clients fold state from the log."
+    }
+  ]
+}
